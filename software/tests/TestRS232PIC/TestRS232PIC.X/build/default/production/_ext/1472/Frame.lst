@@ -1,0 +1,1063 @@
+MPASM 5.87                         FRAME.ASM   11-29-2023  20:28:28         PAGE  1
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+                      00001 
+                      00002 ;******************************************************************************
+                      00003 ;                                                                             *
+                      00004 ;    Filename:      Frame.asm                                                 *
+                      00005 ;    Date:                                                                    *
+                      00006 ;    File Version:                                                            *
+                      00007 ;                                                                             *
+                      00008 ;    Author:                                                                  *
+                      00009 ;    Company:                                                                 *
+                      00010 ;                                                                             *
+                      00011 ;                                                                             *
+                      00012 ;******************************************************************************
+                      00013 ;                                                                             *
+                      00014 ;    Files required:                                                          *
+                      00015 ;                                                                             *
+                      00016 ;                                                                             *
+                      00017 ;                                                                             *
+                      00018 ;******************************************************************************
+                      00019 ;                                                                             *
+                      00020 ;    Notes:                                                                   *
+                      00021 ;                                                                             *
+                      00022 ;                                                                             *
+                      00023 ;                                                                             *
+                      00024 ;                                                                             *
+                      00025 ;******************************************************************************
+                      00026 
+                      00027 ;***********************DIAGRAMME DU CONTROLEUR********************************
+                      00028 ;                                                                     
+                      00029 ;                     IN  IN  S3  IN      S2  S1  TX  D2            S: Switch 
+                      00030 ;                     A1  A0  A7  A6 VDD  B7  B6  B5  B4              
+                      00031 ;                    ____________________________________             
+                      00032 ;           PIN     | 18  17  16  15  14  13  12  11  10 |            
+                      00033 ;                   |               16C88                |            
+                      00034 ;           PIN     | 1   2   3  _4_  5   6   7   8   9  |            
+                      00035 ;                    ------------------------------------             
+                      00036 ;                     A2  A3  A4  A5 VSS  B0  B1  B2  B3              
+                      00037 ;                     IN  IN  IN  MCL     SCL SDA RX  D1            D: Del  
+                      00038 ;
+                      00039 ;******************************************************************************
+                      00040 
+                      00041 
+                      00042 
+                      00043 ;******************** Les fonctions utilisees *********************************
+                      00044 ; InitPic                      ; Initialise le PIC.
+                      00045 ; SDA0                         ; Met SDA a 0
+                      00046 ; SDA1                         ; Met SDA a 1
+                      00047 ; SCL0                         ; Met SCL a 0 
+                      00048 ; SCL1                         ; Met SCL a 1  
+                      00049 ; EcrireMemI2C                 ; Ecrire un octet en memoire I2C
+                      00050 ; LireMemI2C                   ; Lecture d'un octet en memoire I2C
+                      00051 ; Ecrire8BitsI2C               ; Ecrire 8 bits sur la ligne I2C
+                      00052 ; Lire8BitsI2C                 ; Lire 8 bits sur la ligne I2C
+                      00053 ; Ecrit1BitI2C                 ; Emet 1 bit sur la ligne I2C
+MPASM 5.87                         FRAME.ASM   11-29-2023  20:28:28         PAGE  2
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+                      00054 ; Lire1BitI2C                  ; Recoit 1 bit sur la ligne I2C
+                      00055 ; StartBitI2C                  ; Start une communication I2C
+                      00056 ; StopBitI2C                   ; Termine une communication I2C
+                      00057 ; Delai5us                     ; Delai pour maintenir signaux 5us.
+                      00058 ;******************************************************************************
+                      00059 
+                      00060 
+                      00061 
+                      00062      LIST      p=16f88         ; Liste des directives du processeur.
+                      00063      #include <p16F88.inc>     ; Définition des registres spécifiques au CPU.
+                      00001         LIST
+                      00002 
+                      00003 ;==========================================================================
+                      00004 ; Build date : Jan 06 2020
+                      00005 ;  MPASM PIC16F88 processor include
+                      00006 ; 
+                      00007 ;  (c) Copyright 1999-2020 Microchip Technology, All rights reserved
+                      00008 ;==========================================================================
+                      00009 
+                      00550         LIST
+                      00064 
+                      00065      errorlevel  -302          ; Retrait du message d'erreur 302.
+                      00066 
+2007   3F70           00067      __CONFIG    _CONFIG1, _CP_OFF & _CCP1_RB0 & _DEBUG_OFF & _WRT_PROTECT_OFF & _CPD_OFF & _LVP_OFF & _
+                            BODEN_ON & _MCLR_ON & _PWRTE_ON & _WDT_OFF & _INTRC_IO
+                      00068 
+2008   3FFC           00069      __CONFIG    _CONFIG2, _IESO_OFF & _FCMEN_OFF
+                      00070 
+                      00071 
+                      00072 
+                      00073 ;*********************************** DEFINES **********************************
+                      00074 #define      BANK0   bcf       STATUS,RP0;
+                      00075 #define      BANK1   bsf       STATUS,RP0;
+                      00076 #define      CARRY             STATUS,C
+                      00077 #define      ZERO              STATUS,Z
+                      00078      
+                      00079 ;*********************************** KIT-PIC **********************************
+                      00080 #define      SW1               PORTB,6
+                      00081 #define      SW2               PORTB,7
+                      00082 #define      SW3               PORTA,7
+                      00083 #define      DEL1              PORTB,3
+                      00084 #define      DEL2              PORTB,4
+                      00085 
+                      00086 ;************************************ I2C *************************************
+                      00087 #define      SCL               PORTB,0
+                      00088 #define      SDA               PORTB,1
+                      00089 #define      BITSDA            v1Bit,0
+                      00090 #define      OCTET             vOctet,7
+                      00091 
+                      00092 ;*********************************** RS-232 ***********************************
+                      00093 #define     FLAGRX             vFlag,0
+                      00094 #define     FLAGTX             vFlag,1
+                      00095      
+MPASM 5.87                         FRAME.ASM   11-29-2023  20:28:28         PAGE  3
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+                      00096 ;***** VARIABLE DEFINITIONS  **************************************************
+                      00097 ;w_temp        EQU     0x71     ; variable used for context saving 
+                      00098 ;status_temp   EQU     0x72     ; variable used for context saving
+                      00099 ;pclath_temp   EQU     0x73     ; variable used for context saving
+                      00100 
+                      00101 
+                      00102 ;VosVariables  EQU     0x20     ; Mettre ici vos Variables
+                      00103   CBLOCK  0x20
+                      00104   
+                      00105 ;Variables Fonctions I2C 
+                      00106 ;  v1Bit                         ; Variable Bit
+                      00107 ;  vOctet                        ; Variable Octets
+                      00108 ;  vAckValue                    ; Valeur du Ack/NoAck envoyé
+                      00109 ;  vAddH                         ; Adresse basse
+                      00110 ;  vAddB                                ; Adresse haute
+                      00111 ;  vData                                ; Donnée à envoyer
+                      00112 ;  vCompteur                    ; Utilisée pour les boucles I2C
+                      00113 ;  vCompt1ms                    ; Compteur pour le délai 1ms
+                      00114 ;  vCompt5ms                    ; Compteur pour le délai 5ms
+                      00115   
+                      00116 ;Variables fonctions RS-232
+  00000020            00117   vReceive                      ; Utilisée dans les fonctions RS232
+  00000021            00118   vFlag
+  00000022            00119   vDonneeRx
+  00000023            00120   vDonnee0
+  00000024            00121   vDonnee1
+  00000025            00122   vDonnee2
+  00000026            00123   vDonnee3
+  00000027            00124   vDonnee4
+  00000028            00125   vDonnee5
+  00000029            00126   vDonnee6
+  0000002A            00127   vDonnee7
+  0000002B            00128   vNbDonneeRx
+  0000002C            00129   vNbDonneeTx
+                      00130   
+  0000002D            00131   vCompt1                        
+  0000002E            00132   vCompt2
+                      00133   endc
+                      00134 
+                      00135 
+                      00136 
+                      00137 ;***************************VECTEUR DE RESET***********************************
+                      00138      ORG     0x000             ; Processor reset vector
+0000   018A           00139      clrf    PCLATH            ; Page 0 (a cause du BootLoader)
+0001   2???           00140      goto    Main              ; 
+                      00141         
+                      00142 
+                      00143 ;***********************VECTEUR D'INTERRUPTION*********************************    
+                      00144      ORG     0x004             ; Interrupt vector location
+0004   2???           00145      goto    Interruption
+                      00146              
+                      00147              
+                      00148 ;**************************PROGRAMME PRINCIPAL*********************************
+MPASM 5.87                         FRAME.ASM   11-29-2023  20:28:28         PAGE  4
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+                      00149              
+0005                  00150 Main         
+0005   2???           00151     call    InitPic             ; Initialise PIC et place les ports en IN/OUT
+0006   2???           00152     call    InitRS232           ; Initialise la communication RS232 du PIC
+0007   1683           00153     BANK1
+0008   168C           00154     bsf     PIE1,RCIE
+                      00155 ;    bsf            PIE1,TXIE
+0009   170B           00156     bsf     INTCON,PEIE
+000A   178B           00157     bsf     INTCON,GIE
+000B   1283           00158     BANK0
+000C   3000           00159     movlw   .0
+000D   00AB           00160     movwf   vNbDonneeRx
+                      00161     
+000E                  00162 Loop
+                      00163     
+000E                  00164 TestFlagRx
+000E   1821           00165     btfsc   FLAGRX
+000F   2???           00166     goto    SwitchCaseRx
+0010   2???           00167     goto    TestFlagTx
+                      00168     
+0011                  00169 TestFlagTx
+0011   1A0C           00170     btfsc   PIR1,TXIF
+0012   2???           00171     goto    TestSW1   
+0013   2???           00172     goto    Loop 
+                      00173     
+0014                  00174 TestSW1
+0014   1F06           00175     btfss   SW1
+0015   2???           00176     goto    Toggle1
+0016   2???           00177     goto    TestSW2
+                      00178     
+0017                  00179 Toggle1
+0017   1F06           00180     btfss    SW1
+0018   2???           00181     goto     Toggle1
+0019   2???           00182     goto     EnvoyerS
+                      00183     
+001A                  00184 EnvoyerS
+001A   305A           00185     movlw   'Z'
+001B   0099           00186     movwf   TXREG
+                      00187     
+001C                  00188 TestSW2
+001C   1F86           00189     btfss    SW2
+001D   2???           00190     goto     Toggle2
+001E   2???           00191     goto     TestSW3
+                      00192     
+001F                  00193 Toggle2
+001F   1F86           00194     btfss    SW2
+0020   2???           00195     goto     Toggle2
+0021   2???           00196     goto     EnvoyerPhrase
+                      00197     
+0022                  00198 TestSW3
+0022   1F85           00199     btfss    SW3
+0023   2???           00200     goto     Toggle3
+0024   2???           00201     goto     Loop
+MPASM 5.87                         FRAME.ASM   11-29-2023  20:28:28         PAGE  5
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+                      00202     
+0025                  00203 Toggle3
+0025   1F85           00204     btfss    SW3
+0026   2???           00205     goto     Toggle3
+0027   2???           00206     goto     CLEAR
+                      00207     
+0028                  00208 CLEAR
+0028   3000           00209     movlw   .0
+0029   00A3           00210     movwf   vDonnee0
+002A   00A4           00211     movwf   vDonnee1
+002B   00A5           00212     movwf   vDonnee2
+002C   00A6           00213     movwf   vDonnee3
+002D   00A7           00214     movwf   vDonnee4
+002E   00A8           00215     movwf   vDonnee5
+002F   00A9           00216     movwf   vDonnee6
+0030   00AA           00217     movwf   vDonnee7
+0031   00A2           00218     movwf   vDonneeRx
+0032   00AB           00219     movwf   vNbDonneeRx
+0033   2???           00220     goto    Loop
+                      00221     
+0034                  00222 EnvoyerPhrase
+0034   0823           00223     movfw   vDonnee0
+0035   2???           00224     call    Tx232
+0036   0824           00225     movfw   vDonnee1
+0037   2???           00226     call    Tx232
+0038   0825           00227     movfw   vDonnee2
+0039   2???           00228     call    Tx232
+003A   0826           00229     movfw   vDonnee3
+003B   2???           00230     call    Tx232
+003C   0827           00231     movfw   vDonnee4
+003D   2???           00232     call    Tx232
+003E   0828           00233     movfw   vDonnee5
+003F   2???           00234     call    Tx232
+0040   0829           00235     movfw   vDonnee6
+0041   2???           00236     call    Tx232
+0042   082A           00237     movfw   vDonnee7
+0043   2???           00238     call    Tx232
+0044   2???           00239     goto    Loop
+                      00240     
+0045                  00241 SwitchCaseRx
+0045   082B           00242     movfw   vNbDonneeRx
+0046   3C01           00243     sublw   .1
+0047   1D03           00244     btfss   ZERO
+0048   2???           00245     goto    SWITCH1Rx
+                      00246 
+0049   0822           00247     movfw   vDonneeRx        
+004A   00A3           00248     movwf   vDonnee0
+                      00249 ;    incf    vNbDonneeRx
+                      00250     
+004B                  00251 SWITCH1Rx
+004B   082B           00252     movfw   vNbDonneeRx
+004C   3C02           00253     sublw   .2
+004D   1D03           00254     btfss   ZERO
+MPASM 5.87                         FRAME.ASM   11-29-2023  20:28:28         PAGE  6
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+004E   2???           00255     goto    SWITCH2Rx
+                      00256     
+004F   0822           00257     movfw   vDonneeRx        
+0050   00A4           00258     movwf   vDonnee1
+                      00259 ;    incf    vNbDonneeRx
+                      00260     
+0051                  00261 SWITCH2Rx
+0051   082B           00262     movfw   vNbDonneeRx
+0052   3C03           00263     sublw   .3
+0053   1D03           00264     btfss   ZERO
+0054   2???           00265     goto    SWITCH3Rx
+                      00266     
+0055   0822           00267     movfw   vDonneeRx        
+0056   00A5           00268     movwf   vDonnee2
+                      00269 ;    incf    vNbDonneeRx
+                      00270     
+0057                  00271 SWITCH3Rx
+0057   082B           00272     movfw   vNbDonneeRx
+0058   3C04           00273     sublw   .4
+0059   1D03           00274     btfss   ZERO
+005A   2???           00275     goto    SWITCH4Rx
+                      00276     
+005B   0822           00277     movfw   vDonneeRx        
+005C   00A6           00278     movwf   vDonnee3
+                      00279 ;    incf    vNbDonneeRx
+                      00280     
+005D                  00281 SWITCH4Rx
+005D   082B           00282     movfw   vNbDonneeRx
+005E   3C05           00283     sublw   .5
+005F   1D03           00284     btfss   ZERO
+0060   2???           00285     goto    SWITCH5Rx
+                      00286     
+0061   0822           00287     movfw   vDonneeRx        
+0062   00A7           00288     movwf   vDonnee4
+                      00289 ;    incf    vNbDonneeRx
+                      00290     
+0063                  00291 SWITCH5Rx
+0063   082B           00292     movfw   vNbDonneeRx
+0064   3C06           00293     sublw   .6
+0065   1D03           00294     btfss   ZERO
+0066   2???           00295     goto    SWITCH6Rx
+                      00296     
+0067   0822           00297     movfw   vDonneeRx        
+0068   00A8           00298     movwf   vDonnee5
+                      00299 ;    incf    vNbDonneeRx
+                      00300     
+0069                  00301 SWITCH6Rx
+0069   082B           00302     movfw   vNbDonneeRx
+006A   3C07           00303     sublw   .7
+006B   1D03           00304     btfss   ZERO
+006C   2???           00305     goto    SWITCH7Rx
+                      00306     
+006D   0822           00307     movfw   vDonneeRx        
+MPASM 5.87                         FRAME.ASM   11-29-2023  20:28:28         PAGE  7
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+006E   00A9           00308     movwf   vDonnee6
+                      00309 ;    incf    vNbDonneeRx
+                      00310     
+006F                  00311 SWITCH7Rx  
+006F   082B           00312     movfw   vNbDonneeRx
+0070   3C08           00313     sublw   .8
+0071   1D03           00314     btfss   ZERO
+0072   2???           00315     goto    FINSWITCHCASE
+                      00316     
+0073   0822           00317     movfw   vDonneeRx        
+0074   00AA           00318     movwf   vDonnee7
+                      00319 ;    incf    vNbDonneeRx
+                      00320    
+0075                  00321 Test7Switch
+0075   1803           00322     btfsc   CARRY
+0076   2???           00323     goto    DONNEA0
+0077   2???           00324     goto    FINSWITCHCASE
+                      00325     
+0078                  00326 DONNEA0
+0078   3000           00327     movlw   .0
+0079   00AB           00328     movwf   vNbDonneeRx
+                      00329     
+007A                  00330 FINSWITCHCASE
+007A   2???           00331     goto    TestFlagTx
+                      00332     
+007B                  00333 Delai5us
+007B   0000           00334     nop
+007C   0000           00335     nop
+007D   0000           00336     nop
+007E   0008           00337     Return
+                      00338     
+007F                  00339 Delai1ms
+007F   30C8           00340     Movlw    .200
+0080   00AD           00341     Movwf    vCompt1
+0081                  00342 BoucleDelai
+0081   2???           00343     call     Delai5us
+Message[305]: Using default destination of 1 (file).
+0082   0BAD           00344     decfsz   vCompt1
+0083   2???           00345     goto     BoucleDelai
+0084   0008           00346     Return
+                      00347     
+0085                  00348 Delai5ms
+0085   3005           00349     Movlw    .5
+0086   00AE           00350     Movwf    vCompt2
+0087                  00351 BoucleDelai2
+0087   2???           00352     call     Delai1ms
+Message[305]: Using default destination of 1 (file).
+0088   0BAE           00353     decfsz   vCompt2
+0089   2???           00354     goto     BoucleDelai2
+008A   0008           00355     Return
+                      00356 ;******************************* ROUTINES *************************************
+                      00357 
+                      00358 ;******************************* InitPic **************************************
+MPASM 5.87                         FRAME.ASM   11-29-2023  20:28:28         PAGE  8
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+                      00359 ;       Nom de la fonction : InitPic                    
+                      00360 ;       Auteur : Alain Champagne
+                      00361 ;       Date de creation : 23-09-2018                                
+                      00362 ;       Description :      Routine d'initiation des registres du PIC.
+                      00363 ;                          - RP1 à 0 pour être toujours dans Bank 0 et 1,
+                      00364 ;                          - Désactiver les interruptions,
+                      00365 ;                          - Désactiver les entrées analogiques,
+                      00366 ;                          - PortA en entrée,
+                      00367 ;                          - PortB en entrée sauf: Bits I2C et LEDs en sortie.
+                      00368 ;                                                       
+                      00369 ;       Fonctions appelees : NA 
+                      00370 ;       Paramètres d'entree : NA  
+                      00371 ;       Paramètres de sortie : NA 
+                      00372 ;       Variables utilisees : NA  
+                      00373 ;       Include : Fichier P16F88.inc
+                      00374 ;       Equates : NA
+                      00375 ;       #Defines : BANK0, BANK1 
+                      00376 ;                                               
+                      00377 ;******************************************************************************
+008B                  00378 InitPic
+008B   1303           00379      bcf     STATUS, RP1       ; Pour s'assurer d'être dans les bank 0 et 1 
+008C   1683           00380      BANK1                     ; Select Bank1        
+008D   138B           00381      bcf     INTCON,GIE        ; Désactive les interruptions        
+008E   019B           00382      clrf    ANSEL             ; Désactive les convertisseurs reg ANSEL 0x9B        
+008F   3078           00383      movlw   b'01111000'       ; osc internal 8 Mhz
+0090   008F           00384      movwf   OSCCON
+0091   30FF           00385      movlw   b'11111111'       ; Remplacer les x par des 1 ou 0.
+0092   0085           00386      movwf   TRISA             ; PortA en entree         
+0093   30E4           00387      movlw   b'11100100'       ; Bits en entrées sauf,
+0094   0086           00388      movwf   TRISB             ; RB3 (Led1), RB4 (Led2) en sortie. 
+0095   1283           00389      BANK0                     ; Select Bank0
+0096   0008           00390      return
+                      00391 ; fin routine InitPic ---------------------------------------------------------
+                      00392 
+                      00393 #include <FonctionsRS-232.asm>
+                      00001 
+                      00002 ;******************************************************************************
+                      00003 ; Ne pas oublier:  Appeler InitRS232 dans la fonction InitPic
+                      00004 ;******************************************************************************
+                      00005 
+                      00006 
+                      00007 ;------------------------------------RS 232------------------------------------
+                      00008 ;*********************************InitRS232************************************
+                      00009 ;       Nom de la fonction : InitRS232                  
+                      00010 ;       Auteur : Pierre Chouinard               
+                      00011 ;       Date de création : 10-10-2009   
+                      00012 ;       Date de modification : 21-07-2018       A.C.                                          
+                      00013 ;       Description :   Routine d'initialisation du port de communication série.
+                      00014 ;                   RS232 sur le PIC16F88 à 19200 bd (RX=RB2 et TX=RB5)
+                      00015 ;                                                       
+                      00016 ;       Fonctions appelées :    Aucune.         
+                      00017 ;       Paramètres d'entrée :   Aucune.         
+                      00018 ;       Paramètres de sortie :  Aucun.          
+MPASM 5.87                         FRAME.ASM   11-29-2023  20:28:28         PAGE  9
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+                      00019 ;       Variables utilisées :   Aucune.
+                      00020 ;       Equate :                    Aucun.      
+                      00021 ;       #Define :               BANK0, BANK1.  
+                      00022 ;              
+                      00023 ;                                                       
+                      00024 ;******************************************************************************
+0097                  00025 InitRS232
+0097   3090           00026     movlw   b'10010000';     Set reception sur port serie SPEN=CREN = 1
+0098   0098           00027     movwf   RCSTA;       
+0099   1683           00028     BANK1;       
+009A   3024           00029     movlw   b'00100100';     Set la transmission sur le port serie
+009B   0098           00030     movwf   TXSTA;       
+009C   3019           00031     movlw   .25;             Set la vitesse a 19200 bds
+009D   0099           00032     movwf   SPBRG;       
+009E   1283           00033     BANK0;      
+009F   0008           00034     return;             
+                      00035 ;fin routine InitRS232---------------------------------------------------------
+                      00036 
+                      00037 ;*************************************Rx232************************************
+                      00038 ;       Nom de la fonction : Rx232                      
+                      00039 ;       Auteur : Pierre Chouinard               
+                      00040 ;       Date de création : 10-10-2009   
+                      00041 ;       Date de modification : 21-07-2018       A.C.                                          
+                      00042 ;       Description :   Routine de réception de la communication série RS-232.
+                      00043 ;                   RS232 sur le PIC16F88 à 19200 bd (RX=RB2 et TX=RB5)
+                      00044 ;                                                       
+                      00045 ;       Fonctions appelées :    Aucune.         
+                      00046 ;       Paramètres d'entrée :   Aucune.         
+                      00047 ;       Paramètres de sortie :  vReceive.               
+                      00048 ;       Variables utilisées :   Aucune.
+                      00049 ;       Equate :                    Aucun.      
+                      00050 ;       #Define :               Aucun. 
+                      00051 ;                                               
+                      00052 ;******************************************************************************
+00A0                  00053 Rx232;
+00A0   1E8C           00054     Btfss   PIR1,RCIF;       Attend de recevoir quelque chose sur 
+00A1   2???           00055     goto    Rx232;           le port serie.
+00A2                  00056 Rx232Go;                     Si recu sur le port serie
+00A2   081A           00057     movfw   RCREG;        
+00A3   00A0           00058     movwf   vReceive;        Met le caractère reçu dans vReceive
+00A4   0008           00059     return;
+                      00060 ;fin routine Rx232-------------------------------------------------------------
+                      00061 
+                      00062 
+                      00063 ;*************************************Tx232************************************
+                      00064 ;       Nom de la fonction : Tx232                      
+                      00065 ;       Auteur : Pierre Chouinard               
+                      00066 ;       Date de création : 10-10-2009   
+                      00067 ;       Date de modification : 21-07-2018       A.C.                                          
+                      00068 ;       Description :   Routine de transmission de la communication série RS-232.
+                      00069 ;                   RS232 sur le PIC16F88 à 19200 bd (RX=RB2 et TX=RB5)
+                      00070 ;                                                       
+                      00071 ;       Fonctions appelées :    Aucune.         
+MPASM 5.87                         FRAME.ASM   11-29-2023  20:28:28         PAGE 10
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+                      00072 ;       Paramètres d'entrée :   Aucune.         
+                      00073 ;       Paramètres de sortie :  Aucun.          
+                      00074 ;       Variables utilisées :   Aucune.
+                      00075 ;       Equate :                Aucun.  
+                      00076 ;       #Define :               Aucun. 
+                      00077 ;
+                      00078 ;******************************************************************************
+00A5                  00079 Tx232
+00A5   1E0C           00080     btfss   PIR1,TXIF;       Attend que la transmission du caractere 
+00A6   2???           00081     goto    Tx232;           precedant soit terminer   
+00A7   0099           00082     movwf   TXREG;           Transmet le caractere
+00A8   0008           00083     return;       
+                      00084 ;fin routine Tx232-------------------------------------------------------------
+                      00394   
+                      00395 ;****************************** Interruption **********************************
+00A9                  00396 Interruption
+                      00397 
+                      00398 ;    movwf     w_temp         ; save off current W register contents
+                      00399 ;    movf      STATUS,w       ; move STATUS register into W register
+                      00400 ;    movwf     status_temp    ; save off contents of STATUS register
+                      00401 ;    movf      PCLATH,W       ; move PCLATH register into W register
+                      00402 ;    movwf     pclath_temp    ; save off contents of PCLATH register
+                      00403 
+                      00404 ; isr code can go here or be located as a call subroutine elsewhere
+                      00405 
+                      00406 
+                      00407 ;    movf      pclath_temp,w  ; retrieve copy of PCLATH register
+                      00408 ;    movwf     PCLATH         ; restore pre-isr PCLATH register contents
+                      00409 ;    movf      status_temp,w  ; retrieve copy of STATUS register
+                      00410 ;    movwf     STATUS         ; restore pre-isr STATUS register contents
+                      00411 ;    swapf     w_temp,f
+                      00412 ;    swapf     w_temp,w       ; restore pre-isr W register contents
+                      00413 ;    movlw   'a'
+                      00414 ;    call    Tx232
+                      00415      
+                      00416 ;TestTx
+                      00417 ;    btfsc   PIR1,TXIF
+                      00418 ;    goto    TxFlag
+                      00419 ;    goto    TestRx
+                      00420 ;    
+                      00421 ;TxFlag
+                      00422 ;    bsf            FLAGTX
+                      00423 ;    bcf            PIR1,TXIF
+                      00424 ;    goto    TestRx
+                      00425     
+00A9                  00426 TestRx
+00A9   1A8C           00427     btfsc   PIR1,RCIF
+00AA   2???           00428     goto    RxFlag
+00AB   2???           00429     goto    FinInterrupt 
+                      00430     
+00AC                  00431 RxFlag
+00AC   081A           00432     movfw   RCREG        
+00AD   00A2           00433     movwf   vDonneeRx
+MPASM 5.87                         FRAME.ASM   11-29-2023  20:28:28         PAGE 11
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+00AE   128C           00434     bcf     PIR1,RCIF
+Message[305]: Using default destination of 1 (file).
+00AF   0AAB           00435     incf    vNbDonneeRx
+                      00436     
+00B0                  00437 FinInterrupt
+00B0   0009           00438     retfie                   ; return from interrupt
+                      00439 
+                      00440 ; fin de la routine Interruption-----------------------------------------------
+                      00441 
+                      00442 
+                      00443 
+3F70 3FFC             00444         END                       ; directive 'end of program'
+MPASM 5.87                         FRAME.ASM   11-29-2023  20:28:28         PAGE 12
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+ADCON0                            0000001F
+ADCON1                            0000009F
+ADCS0                             00000006
+ADCS1                             00000007
+ADCS2                             00000006
+ADDEN                             00000003
+ADFM                              00000007
+ADIE                              00000006
+ADIF                              00000006
+ADON                              00000000
+ADRESH                            0000001E
+ADRESL                            0000009E
+ANS0                              00000000
+ANS1                              00000001
+ANS2                              00000002
+ANS3                              00000003
+ANS4                              00000004
+ANS5                              00000005
+ANS6                              00000006
+ANSEL                             0000009B
+BANK0                             bcf       STATUS,RP0
+BANK1                             bsf       STATUS,RP0
+BF                                00000000
+BITSDA                            v1Bit,0
+BRGH                              00000002
+BoucleDelai                       00000081
+BoucleDelai2                      00000087
+C                                 00000000
+C1INV                             00000004
+C1OUT                             00000006
+C2INV                             00000005
+C2OUT                             00000007
+CARRY                             STATUS,C
+CCP1CON                           00000017
+CCP1IE                            00000002
+CCP1IF                            00000002
+CCP1M0                            00000000
+CCP1M1                            00000001
+CCP1M2                            00000002
+CCP1M3                            00000003
+CCP1X                             00000005
+CCP1Y                             00000004
+CCPR1                             00000015
+CCPR1H                            00000016
+CCPR1L                            00000015
+CHS0                              00000003
+CHS1                              00000004
+CHS2                              00000005
+CIS                               00000003
+CKE                               00000006
+CKP                               00000004
+CLEAR                             00000028
+CM0                               00000000
+MPASM 5.87                         FRAME.ASM   11-29-2023  20:28:28         PAGE 13
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+CM1                               00000001
+CM2                               00000002
+CMCON                             0000009C
+CMIE                              00000006
+CMIF                              00000006
+CREN                              00000004
+CSRC                              00000007
+CVR0                              00000000
+CVR1                              00000001
+CVR2                              00000002
+CVR3                              00000003
+CVRCON                            0000009D
+CVREN                             00000007
+CVROE                             00000006
+CVRR                              00000005
+D                                 00000005
+DATA_ADDRESS                      00000005
+DC                                00000001
+DEL1                              PORTB,3
+DEL2                              PORTB,4
+DONNEA0                           00000078
+D_A                               00000005
+D_NOT_A                           00000005
+Delai1ms                          0000007F
+Delai5ms                          00000085
+Delai5us                          0000007B
+EEADR                             0000010D
+EEADRH                            0000010F
+EECON1                            0000018C
+EECON2                            0000018D
+EEDATA                            0000010C
+EEDATH                            0000010E
+EEIE                              00000004
+EEIF                              00000004
+EEPGD                             00000007
+EnvoyerPhrase                     00000034
+EnvoyerS                          0000001A
+F                                 00000001
+FERR                              00000002
+FINSWITCHCASE                     0000007A
+FLAGRX                            vFlag,0
+FLAGTX                            vFlag,1
+FREE                              00000004
+FSR                               00000004
+FinInterrupt                      000000B0
+GIE                               00000007
+GO                                00000002
+GO_DONE                           00000002
+GO_NOT_DONE                       00000002
+I2C_DATA                          00000005
+I2C_READ                          00000002
+I2C_START                         00000003
+I2C_STOP                          00000004
+MPASM 5.87                         FRAME.ASM   11-29-2023  20:28:28         PAGE 14
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+INDF                              00000000
+INT0IE                            00000004
+INT0IF                            00000001
+INTCON                            0000000B
+INTE                              00000004
+INTEDG                            00000006
+INTF                              00000001
+IOFS                              00000002
+IRCF0                             00000004
+IRCF1                             00000005
+IRCF2                             00000006
+IRP                               00000007
+InitPic                           0000008B
+InitRS232                         00000097
+Interruption                      000000A9
+Loop                              0000000E
+Main                              00000005
+NOT_A                             00000005
+NOT_ADDRESS                       00000005
+NOT_BO                            00000000
+NOT_BOR                           00000000
+NOT_DONE                          00000002
+NOT_PD                            00000003
+NOT_POR                           00000001
+NOT_RBPU                          00000007
+NOT_RC8                           00000006
+NOT_T1SYNC                        00000002
+NOT_TO                            00000004
+NOT_TX8                           00000006
+NOT_W                             00000002
+NOT_WRITE                         00000002
+OCTET                             vOctet,7
+OERR                              00000001
+OPTION_REG                        00000081
+OSCCON                            0000008F
+OSCTUNE                           00000090
+OSFIE                             00000007
+OSFIF                             00000007
+OSTS                              00000003
+P                                 00000004
+PCL                               00000002
+PCLATH                            0000000A
+PCON                              0000008E
+PEIE                              00000006
+PIE1                              0000008C
+PIE2                              0000008D
+PIR1                              0000000C
+PIR2                              0000000D
+PORTA                             00000005
+PORTB                             00000006
+PR2                               00000092
+PS0                               00000000
+PS1                               00000001
+MPASM 5.87                         FRAME.ASM   11-29-2023  20:28:28         PAGE 15
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+PS2                               00000002
+PSA                               00000003
+R                                 00000002
+RA0                               00000000
+RA1                               00000001
+RA2                               00000002
+RA3                               00000003
+RA4                               00000004
+RA5                               00000005
+RA6                               00000006
+RA7                               00000007
+RB0                               00000000
+RB1                               00000001
+RB2                               00000002
+RB3                               00000003
+RB4                               00000004
+RB5                               00000005
+RB6                               00000006
+RB7                               00000007
+RBIE                              00000003
+RBIF                              00000000
+RC8_9                             00000006
+RC9                               00000006
+RCD8                              00000000
+RCIE                              00000005
+RCIF                              00000005
+RCREG                             0000001A
+RCSTA                             00000018
+RD                                00000000
+READ_WRITE                        00000002
+RP0                               00000005
+RP1                               00000006
+RX9                               00000006
+RX9D                              00000000
+R_NOT_W                           00000002
+R_W                               00000002
+Rx232                             000000A0
+Rx232Go                           000000A2
+RxFlag                            000000AC
+S                                 00000003
+SCL                               PORTB,0
+SCS0                              00000000
+SCS1                              00000001
+SDA                               PORTB,1
+SMP                               00000007
+SPBRG                             00000099
+SPEN                              00000007
+SREN                              00000005
+SSPADD                            00000093
+SSPBUF                            00000013
+SSPCON                            00000014
+SSPEN                             00000005
+SSPIE                             00000003
+MPASM 5.87                         FRAME.ASM   11-29-2023  20:28:28         PAGE 16
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+SSPIF                             00000003
+SSPM0                             00000000
+SSPM1                             00000001
+SSPM2                             00000002
+SSPM3                             00000003
+SSPOV                             00000006
+SSPSTAT                           00000094
+STATUS                            00000003
+SW1                               PORTB,6
+SW2                               PORTB,7
+SW3                               PORTA,7
+SWDTE                             00000000
+SWDTEN                            00000000
+SWITCH1Rx                         0000004B
+SWITCH2Rx                         00000051
+SWITCH3Rx                         00000057
+SWITCH4Rx                         0000005D
+SWITCH5Rx                         00000063
+SWITCH6Rx                         00000069
+SWITCH7Rx                         0000006F
+SYNC                              00000004
+SwitchCaseRx                      00000045
+T0CS                              00000005
+T0SE                              00000004
+T1CKPS0                           00000004
+T1CKPS1                           00000005
+T1CON                             00000010
+T1INSYNC                          00000002
+T1OSCEN                           00000003
+T1RUN                             00000006
+T2CKPS0                           00000000
+T2CKPS1                           00000001
+T2CON                             00000012
+TMR0                              00000001
+TMR0IE                            00000005
+TMR0IF                            00000002
+TMR1                              0000000E
+TMR1CS                            00000001
+TMR1H                             0000000F
+TMR1IE                            00000000
+TMR1IF                            00000000
+TMR1L                             0000000E
+TMR1ON                            00000000
+TMR2                              00000011
+TMR2IE                            00000001
+TMR2IF                            00000001
+TMR2ON                            00000002
+TOUTPS0                           00000003
+TOUTPS1                           00000004
+TOUTPS2                           00000005
+TOUTPS3                           00000006
+TRISA                             00000085
+TRISA0                            00000000
+MPASM 5.87                         FRAME.ASM   11-29-2023  20:28:28         PAGE 17
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+TRISA1                            00000001
+TRISA2                            00000002
+TRISA3                            00000003
+TRISA4                            00000004
+TRISA5                            00000005
+TRISA6                            00000006
+TRISA7                            00000007
+TRISB                             00000086
+TRISB0                            00000000
+TRISB1                            00000001
+TRISB2                            00000002
+TRISB3                            00000003
+TRISB4                            00000004
+TRISB5                            00000005
+TRISB6                            00000006
+TRISB7                            00000007
+TRMT                              00000001
+TUN0                              00000000
+TUN1                              00000001
+TUN2                              00000002
+TUN3                              00000003
+TUN4                              00000004
+TUN5                              00000005
+TX8_9                             00000006
+TX9                               00000006
+TX9D                              00000000
+TXD8                              00000000
+TXEN                              00000005
+TXIE                              00000004
+TXIF                              00000004
+TXREG                             00000019
+TXSTA                             00000098
+Test7Switch                       00000075
+TestFlagRx                        0000000E
+TestFlagTx                        00000011
+TestRx                            000000A9
+TestSW1                           00000014
+TestSW2                           0000001C
+TestSW3                           00000022
+Toggle1                           00000017
+Toggle2                           0000001F
+Toggle3                           00000025
+Tx232                             000000A5
+UA                                00000001
+VCFG0                             00000004
+VCFG1                             00000005
+W                                 00000000
+WCOL                              00000007
+WDTCON                            00000105
+WDTPS0                            00000001
+WDTPS1                            00000002
+WDTPS2                            00000003
+WDTPS3                            00000004
+MPASM 5.87                         FRAME.ASM   11-29-2023  20:28:28         PAGE 18
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+WR                                00000001
+WREN                              00000002
+WRERR                             00000003
+Z                                 00000002
+ZERO                              STATUS,Z
+_BODEN_OFF                        00003FBF
+_BODEN_ON                         00003FFF
+_BOREN_OFF                        00003FBF
+_BOREN_ON                         00003FFF
+_CCP1_RB0                         00003FFF
+_CCP1_RB3                         00002FFF
+_CCPMX_RB0                        00003FFF
+_CCPMX_RB3                        00002FFF
+_CONFIG1                          00002007
+_CONFIG2                          00002008
+_CPD_OFF                          00003FFF
+_CPD_ON                           00003EFF
+_CP_ALL                           00001FFF
+_CP_OFF                           00003FFF
+_CP_ON                            00001FFF
+_DEBUG_OFF                        00003FFF
+_DEBUG_ON                         000037FF
+_DEVID1                           00002006
+_EXTCLK                           00003FEF
+_EXTRC_CLKOUT                     00003FFF
+_EXTRC_IO                         00003FFE
+_FCMEN_OFF                        00003FFE
+_FCMEN_ON                         00003FFF
+_FOSC_EC                          00003FEF
+_FOSC_EXTRCCLK                    00003FFF
+_FOSC_EXTRCIO                     00003FFE
+_FOSC_HS                          00003FEE
+_FOSC_INTOSCCLK                   00003FFD
+_FOSC_INTOSCIO                    00003FFC
+_FOSC_LP                          00003FEC
+_FOSC_XT                          00003FED
+_HS_OSC                           00003FEE
+_IDLOC0                           00002000
+_IDLOC1                           00002001
+_IDLOC2                           00002002
+_IDLOC3                           00002003
+_IESO_OFF                         00003FFD
+_IESO_ON                          00003FFF
+_INTRC_CLKOUT                     00003FFD
+_INTRC_IO                         00003FFC
+_LP_OSC                           00003FEC
+_LVP_OFF                          00003F7F
+_LVP_ON                           00003FFF
+_MCLRE_OFF                        00003FDF
+_MCLRE_ON                         00003FFF
+_MCLR_OFF                         00003FDF
+_MCLR_ON                          00003FFF
+_PWRTE_OFF                        00003FFF
+MPASM 5.87                         FRAME.ASM   11-29-2023  20:28:28         PAGE 19
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+_PWRTE_ON                         00003FF7
+_WDTE_OFF                         00003FFB
+_WDTE_ON                          00003FFF
+_WDT_OFF                          00003FFB
+_WDT_ON                           00003FFF
+_WRT_2048                         00003BFF
+_WRT_256                          00003DFF
+_WRT_ALL                          000039FF
+_WRT_OFF                          00003FFF
+_WRT_PROTECT_2048                 00003BFF
+_WRT_PROTECT_256                  00003DFF
+_WRT_PROTECT_ALL                  000039FF
+_WRT_PROTECT_OFF                  00003FFF
+_XT_OSC                           00003FED
+__16F88                           00000001
+vCompt1                           0000002D
+vCompt2                           0000002E
+vDonnee0                          00000023
+vDonnee1                          00000024
+vDonnee2                          00000025
+vDonnee3                          00000026
+vDonnee4                          00000027
+vDonnee5                          00000028
+vDonnee6                          00000029
+vDonnee7                          0000002A
+vDonneeRx                         00000022
+vFlag                             00000021
+vNbDonneeRx                       0000002B
+vNbDonneeTx                       0000002C
+vReceive                          00000020
+
+Errors   :     0
+Warnings :     0 reported,     0 suppressed
+Messages :     3 reported,     7 suppressed
+
+

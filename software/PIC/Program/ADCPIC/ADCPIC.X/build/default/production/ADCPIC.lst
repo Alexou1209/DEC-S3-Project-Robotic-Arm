@@ -1,0 +1,720 @@
+MPASM 5.87                        ADCPIC.ASM   11-28-2023  14:03:44         PAGE  1
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+                      00001 ;   This file is a basic code template for assembly code generation   *
+                      00002 ;   on the PICmicro PIC16F88. This file contains the basic code       *
+                      00003 ;   building blocks to build upon.                                    *
+                      00004 ;                                                                     *
+                      00005 ;   If interrupts are not used all code presented between the ORG     *
+                      00006 ;   0x004 directive and the label main can be removed. In addition    *
+                      00007 ;   the variable assignments for 'w_temp' and 'status_temp' can       *
+                      00008 ;   be removed.                                                       *
+                      00009 ;                                                                     *
+                      00010 ;   Refer to the MPASM User's Guide for additional information on     *
+                      00011 ;   features of the assembler (Document DS33014).                     *
+                      00012 ;                                                                     *
+                      00013 ;   Refer to the respective PICmicro data sheet for additional        *
+                      00014 ;   information on the instruction set.                               *
+                      00015 ;                                                                     *
+                      00016 ;**********************************************************************
+                      00017 ;                                                                     *
+                      00018 ;    Filename:      ADCPIC.asm                                        *
+                      00019 ;    Date: 23-11-28                                                           *
+                      00020 ;    File Version: V1                                                   *
+                      00021 ;                                                                     *
+                      00022 ;    Author:                                                          *
+                      00023 ;    Company:                                                         *
+                      00024 ;                                                                     *
+                      00025 ;                                                                     *
+                      00026 ;**********************************************************************
+                      00027 ;                                                                     *
+                      00028 ;    Files required:                                                  *
+                      00029 ;                                                                     *
+                      00030 ;                                                                     *
+                      00031 ;                                                                     *
+                      00032 ;**********************************************************************
+                      00033 ;                                                                     *
+                      00034 ;    Notes:                                                           *
+                      00035 ;                                                                     *
+                      00036 ;                                                                     *
+                      00037 ;                                                                     *
+                      00038 ;                                                                     *
+                      00039 ;**********************************************************************
+                      00040 
+                      00041      LIST      p=16f88         ; Liste des directives du processeur.
+                      00042      #include <p16F88.inc>     ; Définition des registres spécifiques au CPU.
+                      00001         LIST
+                      00002 ; P16F88.INC  Standard Header File, Version 1.00    Microchip Technology, Inc.
+                      00401         LIST
+                      00043 
+                      00044      errorlevel  -302          ; Retrait du message d'erreur 302.
+                      00045 
+2007   3F70           00046      __CONFIG    _CONFIG1, _CP_OFF & _CCP1_RB0 & _DEBUG_OFF & _WRT_PROTECT_OFF & _CPD_OFF & _LVP_OFF & _
+                            BODEN_ON & _MCLR_ON & _PWRTE_ON & _WDT_OFF & _INTRC_IO
+                      00047 
+2008   3FFC           00048      __CONFIG    _CONFIG2, _IESO_OFF & _FCMEN_OFF
+                      00049 
+MPASM 5.87                        ADCPIC.ASM   11-28-2023  14:03:44         PAGE  2
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+                      00050 
+                      00051 
+                      00052 ; '__CONFIG' directive is used to embed configuration word within .asm file.
+                      00053 ; The lables following the directive are located in the respective .inc file.
+                      00054 ; See data sheet for additional information on configuration word settings.
+                      00055 
+                      00056 
+                      00057 ;***********************************DEFINES************************************
+                      00058 #define      BANK0             bcf   STATUS,RP0;
+                      00059 #define      BANK1             bsf   STATUS,RP0;
+                      00060 
+                      00061 #define     SW1     PORTB, 06
+                      00062 #define     SW2     PORTB, 07
+                      00063 #define     SW3     PORTA, 07
+                      00064 #define     LED1    PORTB, 03
+                      00065 #define     LED2    PORTB, 04
+                      00066 
+                      00067 ;***** VARIABLE DEFINITIONS
+  00000071            00068 w_temp        EQU     0x71        ; variable used for context saving 
+  00000072            00069 status_temp   EQU     0x72        ; variable used for context saving
+  00000073            00070 pclath_temp   EQU     0x73        ; variable used for context saving
+                      00071 
+                      00072 
+                      00073 
+                      00074 ;VosVariables  EQU     0x20       ; Mettre ici vos Variables
+                      00075   CBLOCK  0x20
+  00000020            00076   vADCH                           ; Valeur Haute du resultat de conversion
+  00000021            00077   vADCL                           ; Valeur Basse du resultat de conversion
+                      00078 
+                      00079   endc
+                      00080 
+                      00081 
+                      00082 
+                      00083 
+                      00084 
+                      00085 ;*************************VECTEUR DE RESET*************************************
+                      00086      ORG     0x000             ; Processor reset vector
+0000   018A           00087      clrf    PCLATH            ; Page 0 (a cause du BootLoader)
+0001   2???           00088      goto    main              ; 
+                      00089         
+                      00090 
+                      00091 ;***********************VECTEUR D'INTERRUPTION*********************************    
+                      00092      ORG     0x004             ; Interrupt vector location
+0004   2???           00093      goto    Interruption
+                      00094 
+0005                  00095 main
+0005   2???           00096      call   InitPic
+                      00097      
+                      00098      
+0006                  00099 Again
+                      00100   
+                      00101      
+                      00102      
+MPASM 5.87                        ADCPIC.ASM   11-28-2023  14:03:44         PAGE  3
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+0006   2???           00103      goto   Again
+                      00104      
+                      00105 
+                      00106 
+                      00107    
+                      00108      
+                      00109      
+                      00110      
+                      00111      
+                      00112 ; remaining code goes here
+                      00113 
+                      00114 
+                      00115 
+                      00116 
+                      00117 
+                      00118 
+                      00119 
+                      00120 
+                      00121 
+                      00122 ;******************************************************************************
+                      00123 
+                      00124 ;******************************* ROUTINES *************************************
+                      00125 
+                      00126 ;******************************* InitPic **************************************
+                      00127 ;       Nom de la fonction : InitPic                    
+                      00128 ;       Auteur : Alain Champagne
+                      00129 ;       Date de creation : 23-09-2018                                
+                      00130 ;       Description :      Routine d'initiation des registres du PIC.
+                      00131 ;                          - RP1 à 0 pour être toujours dans Bank 0 et 1,
+                      00132 ;                          - Désactiver les interruptions,
+                      00133 ;                          - Désactiver les entrées analogiques,
+                      00134 ;                          - PortA en entrée,
+                      00135 ;                          - PortB en entrée sauf: Bits I2C et LEDs en sortie.
+                      00136 ;                                                       
+                      00137 ;       Fonctions appelees : NA 
+                      00138 ;       Paramètres d'entree : NA  
+                      00139 ;       Paramètres de sortie : NA 
+                      00140 ;       Variables utilisees : NA  
+                      00141 ;       Include : Fichier P16F88.inc
+                      00142 ;       Equates : NA
+                      00143 ;       #Defines : BANK0, BANK1 
+                      00144 ;                                               
+                      00145 ;******************************************************************************
+0007                  00146 InitPic
+0007   1303           00147      bcf     STATUS, RP1       ; Pour s'assurer d'être dans les bank 0 et 1 
+0008   1683           00148      BANK1                     ; Select Bank1        
+0009   138B           00149      bcf     INTCON,GIE        ; Désactive les interruptions        
+000A   019B           00150      clrf    ANSEL             ; Désactive les convertisseurs reg ANSEL 0x9B        
+000B   3078           00151      movlw   b'01111000'       ; osc internal 8 Mhz
+000C   008F           00152      movwf   OSCCON
+000D   30FF           00153      movlw   b'11111111'       ; Remplacer les x par des 1 ou 0.
+000E   0085           00154      movwf   TRISA             ; PortA en entree         
+000F   30E7           00155      movlw   b'11100111'       ; Bits en entrées sauf,
+MPASM 5.87                        ADCPIC.ASM   11-28-2023  14:03:44         PAGE  4
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+0010   0086           00156      movwf   TRISB             ; RB3 (Led1), RB4 (Led2) en sortie. 
+0011   1283           00157      BANK0                     ; Select Bank0
+0012   0008           00158      return
+                      00159 
+                      00160 ; fin routine InitPic ---------------------------------------------------------
+                      00161 
+                      00162 
+                      00163      
+                      00164 ;******************************* InitADC **************************************
+                      00165 ;       Nom de la fonction : InitADC                   
+                      00166 ;       Auteur : Félix Tremblay
+                      00167 ;       Date de creation : 23-11-28                              
+                      00168 ;       Description : Fonction d'initialisation de l'ADC. 
+                      00169 ;                     Le bit A0 du PortA est pour etre convertit, de base.
+                      00170 ;
+                      00171 ;                                                       
+                      00172 ;       Fonctions appelees : NA 
+                      00173 ;       Paramètres d'entree : NA  
+                      00174 ;       Paramètres de sortie : NA 
+                      00175 ;       Variables utilisees : NA  
+                      00176 ;       Include : Fichier P16F88.inc
+                      00177 ;       Equates : NA
+                      00178 ;       Define : Aucun 
+                      00179 ;                                               
+                      00180 ;******************************************************************************
+0013                  00181 InitADC
+0013   1683           00182      BANK1
+0014   3007           00183      movlw   b'00000111'
+0015   009B           00184      movwf   ANSEL
+0016   30C0           00185      movlw   b'11000000'
+0017   009F           00186      movwf   ADCON1
+0018   1283           00187      BANK0
+0019   3081           00188      movlw   b'10000001'
+001A   009F           00189      movwf   ADCON0
+001B   0008           00190      return 
+                      00191 ; fin routine InitADC ---------------------------------------------------------
+                      00192      
+                      00193      
+                      00194 ;******************************* StartConvADC **********************************
+                      00195 ;       Nom de la fonction : StartConvADC                   
+                      00196 ;       Auteur : Félix Tremblay
+                      00197 ;       Date de creation : 23-11-28                              
+                      00198 ;       Description : Fonction qui demarre une converstion ADC
+                      00199 
+                      00200 ;                                                       
+                      00201 ;       Fonctions appelees : NA 
+                      00202 ;       Paramètres d'entree : NA  
+                      00203 ;       Paramètres de sortie : NA 
+                      00204 ;       Variables utilisees : NA  
+                      00205 ;       Include : Fichier P16F88.inc
+                      00206 ;       Equates : NA
+                      00207 ;       Define : Aucun 
+                      00208 ;                                               
+MPASM 5.87                        ADCPIC.ASM   11-28-2023  14:03:44         PAGE  5
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+                      00209 ;******************************************************************************
+001C                  00210 StartConvADC
+001C   151F           00211      bsf     ADCON0, 02
+001D   0008           00212      return 
+                      00213 ; fin routine StartConvADC -----------------------------------------------------
+                      00214      
+                      00215      
+                      00216 ;******************************* LectureADC ************************************
+                      00217 ;       Nom de la fonction : LectureADC                 
+                      00218 ;       Auteur : Félix Tremblay
+                      00219 ;       Date de creation : 23-11-28                              
+                      00220 ;       Description : Fonction qui lit le resultat convertit de l'ADC 
+                      00221 ;                     vADCL et vADCH doivent etre declare au debut du programme
+                      00222 ;
+                      00223 ;                                                       
+                      00224 ;       Fonctions appelees : NA 
+                      00225 ;       Paramètres d'entree : NA  
+                      00226 ;       Paramètres de sortie : NA 
+                      00227 ;       Variables utilisees : vADCH, vADCL  
+                      00228 ;       Include : Fichier P16F88.inc
+                      00229 ;       Equates : NA
+                      00230 ;       Define : Aucun 
+                      00231 ;                                               
+                      00232 ;******************************************************************************
+001E                  00233 LectureADC
+001E   1683           00234      BANK1
+001F   081E           00235      movf    ADRESL, w
+0020   00A1           00236      movwf   vADCL
+0021   1283           00237      BANK0
+0022   081E           00238      movf    ADRESH, w
+0023   00A0           00239      movwf   vADCH
+0024   0008           00240      return 
+                      00241 ; fin routine  LectureADC ------------------------------------------------------ 
+                      00242           
+                      00243 
+                      00244      
+                      00245 ;******************************* SelectPA0ADC **********************************
+                      00246 ;       Nom de la fonction : SelectPA0ADC                   
+                      00247 ;       Auteur : Félix Tremblay
+                      00248 ;       Date de creation : 23-11-28                              
+                      00249 ;       Description : Fonction qui selectionne l'entree A0 du PortA pour etre 
+                      00250 ;                     convertit     
+                      00251 ;
+                      00252 ;                                                       
+                      00253 ;       Fonctions appelees : NA 
+                      00254 ;       Paramètres d'entree : NA  
+                      00255 ;       Paramètres de sortie : NA 
+                      00256 ;       Variables utilisees : NA  
+                      00257 ;       Include : Fichier P16F88.inc
+                      00258 ;       Equates : NA
+                      00259 ;       Define : Aucun 
+                      00260 ;                                               
+                      00261 ;******************************************************************************
+MPASM 5.87                        ADCPIC.ASM   11-28-2023  14:03:44         PAGE  6
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+0025                  00262 SelectPA0ADC
+0025   119F           00263      bcf     ADCON0, 03
+0026   121F           00264      bcf     ADCON0, 04
+0027   0008           00265      return 
+                      00266 ; fin routine  SelectPA0ADC ----------------------------------------------------
+                      00267      
+                      00268 
+                      00269 ;******************************* SelectPA1ADC **********************************
+                      00270 ;       Nom de la fonction : SelectPA1ADC                   
+                      00271 ;       Auteur : Félix Tremblay
+                      00272 ;       Date de creation : 23-11-28                              
+                      00273 ;       Description : Fonction qui selectionne l'entree A1 du PortA pour etre 
+                      00274 ;                     convertit     
+                      00275 ;
+                      00276 ;                                                       
+                      00277 ;       Fonctions appelees : NA 
+                      00278 ;       Paramètres d'entree : NA  
+                      00279 ;       Paramètres de sortie : NA 
+                      00280 ;       Variables utilisees : NA  
+                      00281 ;       Include : Fichier P16F88.inc
+                      00282 ;       Equates : NA
+                      00283 ;       Define : Aucun 
+                      00284 ;                                               
+                      00285 ;******************************************************************************
+0028                  00286 SelectPA1ADC
+0028   121F           00287      bcf     ADCON0, 04
+0029   159F           00288      bsf     ADCON0, 03
+002A   0008           00289      return 
+                      00290 ; fin routine  SelectPA0ADC ----------------------------------------------------
+                      00291      
+                      00292      
+                      00293 ;******************************* SelectPA2ADC **********************************
+                      00294 ;       Nom de la fonction : SelectPA2ADC                   
+                      00295 ;       Auteur : Félix Tremblay
+                      00296 ;       Date de creation : 23-11-28                              
+                      00297 ;       Description : Fonction qui selectionne l'entree A2 du PortA pour etre 
+                      00298 ;                     convertit     
+                      00299 ;
+                      00300 ;                                                       
+                      00301 ;       Fonctions appelees : NA 
+                      00302 ;       Paramètres d'entree : NA  
+                      00303 ;       Paramètres de sortie : NA 
+                      00304 ;       Variables utilisees : NA  
+                      00305 ;       Include : Fichier P16F88.inc
+                      00306 ;       Equates : NA
+                      00307 ;       Define : Aucun 
+                      00308 ;                                               
+                      00309 ;******************************************************************************
+002B                  00310 SelectPA2ADC
+002B   119F           00311      bcf     ADCON0, 03
+002C   161F           00312      bsf     ADCON0, 04
+002D   0008           00313      return 
+                      00314 ; fin routine  SelectPA2ADC ----------------------------------------------------     
+MPASM 5.87                        ADCPIC.ASM   11-28-2023  14:03:44         PAGE  7
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+                      00315      
+                      00316      
+                      00317 
+                      00318 ;****************************** Interruption **********************************
+002E                  00319 Interruption
+                      00320 
+                      00321 ;    movwf     w_temp         ; save off current W register contents
+                      00322 ;    movf      STATUS,w       ; move STATUS register into W register
+                      00323 ;    movwf     status_temp    ; save off contents of STATUS register
+                      00324 ;    movf      PCLATH,W       ; move PCLATH register into W register
+                      00325 ;    movwf     pclath_temp    ; save off contents of PCLATH register
+                      00326 
+                      00327 ; isr code can go here or be located as a call subroutine elsewhere
+                      00328 
+                      00329 
+                      00330 ;    movf      pclath_temp,w  ; retrieve copy of PCLATH register
+                      00331 ;    movwf     PCLATH         ; restore pre-isr PCLATH register contents
+                      00332 ;    movf      status_temp,w  ; retrieve copy of STATUS register
+                      00333 ;    movwf     STATUS         ; restore pre-isr STATUS register contents
+                      00334 ;    swapf     w_temp,f
+                      00335 ;    swapf     w_temp,w       ; restore pre-isr W register contents
+002E   0009           00336     retfie                   ; return from interrupt
+                      00337 
+                      00338 ; fin de la routine Interruption-----------------------------------------------
+                      00339 
+                      00340 
+                      00341 
+                      00342 ; initialize eeprom locations
+                      00343 
+                      00344         ORG     0x2100
+2100   0000 0001 0002 00345         DE      0x00, 0x01, 0x02, 0x03
+       0003 
+                      00346 
+                      00347 
+3F70 3FFC             00348         END                       ; directive 'end of program'
+MPASM 5.87                        ADCPIC.ASM   11-28-2023  14:03:44         PAGE  8
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+ADCON0                            0000001F
+ADCON1                            0000009F
+ADCS0                             00000006
+ADCS1                             00000007
+ADCS2                             00000006
+ADDEN                             00000003
+ADFM                              00000007
+ADIE                              00000006
+ADIF                              00000006
+ADON                              00000000
+ADRESH                            0000001E
+ADRESL                            0000009E
+ANSEL                             0000009B
+Again                             00000006
+BANK0                             bcf   STATUS,RP0
+BANK1                             bsf   STATUS,RP0
+BF                                00000000
+BRGH                              00000002
+C                                 00000000
+C1INV                             00000004
+C1OUT                             00000006
+C2INV                             00000005
+C2OUT                             00000007
+CCP1CON                           00000017
+CCP1IE                            00000002
+CCP1IF                            00000002
+CCP1M0                            00000000
+CCP1M1                            00000001
+CCP1M2                            00000002
+CCP1M3                            00000003
+CCP1X                             00000005
+CCP1Y                             00000004
+CCPR1H                            00000016
+CCPR1L                            00000015
+CHS0                              00000003
+CHS1                              00000004
+CHS2                              00000005
+CIS                               00000003
+CKE                               00000006
+CKP                               00000004
+CM0                               00000000
+CM1                               00000001
+CM2                               00000002
+CMCON                             0000009C
+CMIE                              00000006
+CMIF                              00000006
+CREN                              00000004
+CSRC                              00000007
+CVR0                              00000000
+CVR1                              00000001
+CVR2                              00000002
+CVR3                              00000003
+CVRCON                            0000009D
+MPASM 5.87                        ADCPIC.ASM   11-28-2023  14:03:44         PAGE  9
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+CVREN                             00000007
+CVROE                             00000006
+CVRR                              00000005
+D                                 00000005
+DATA_ADDRESS                      00000005
+DC                                00000001
+D_A                               00000005
+EEADR                             0000010D
+EEADRH                            0000010F
+EECON1                            0000018C
+EECON2                            0000018D
+EEDATA                            0000010C
+EEDATH                            0000010E
+EEIE                              00000004
+EEIF                              00000004
+EEPGD                             00000007
+F                                 00000001
+FERR                              00000002
+FREE                              00000004
+FSR                               00000004
+GIE                               00000007
+GO                                00000002
+GO_DONE                           00000002
+I2C_DATA                          00000005
+I2C_READ                          00000002
+I2C_START                         00000003
+I2C_STOP                          00000004
+INDF                              00000000
+INTCON                            0000000B
+INTE                              00000004
+INTEDG                            00000006
+INTF                              00000001
+IOFS                              00000002
+IRCF0                             00000004
+IRCF1                             00000005
+IRCF2                             00000006
+IRP                               00000007
+InitADC                           00000013
+InitPic                           00000007
+Interruption                      0000002E
+LED1                              PORTB, 03
+LED2                              PORTB, 04
+LectureADC                        0000001E
+NOT_A                             00000005
+NOT_ADDRESS                       00000005
+NOT_BO                            00000000
+NOT_BOR                           00000000
+NOT_DONE                          00000002
+NOT_PD                            00000003
+NOT_POR                           00000001
+NOT_RBPU                          00000007
+NOT_RC8                           00000006
+NOT_T1SYNC                        00000002
+MPASM 5.87                        ADCPIC.ASM   11-28-2023  14:03:44         PAGE 10
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+NOT_TO                            00000004
+NOT_TX8                           00000006
+NOT_W                             00000002
+NOT_WRITE                         00000002
+OERR                              00000001
+OPTION_REG                        00000081
+OSCCON                            0000008F
+OSCTUNE                           00000090
+OSFIE                             00000007
+OSFIF                             00000007
+OSTS                              00000003
+P                                 00000004
+PCL                               00000002
+PCLATH                            0000000A
+PCON                              0000008E
+PEIE                              00000006
+PIE1                              0000008C
+PIE2                              0000008D
+PIR1                              0000000C
+PIR2                              0000000D
+PORTA                             00000005
+PORTB                             00000006
+PR2                               00000092
+PS0                               00000000
+PS1                               00000001
+PS2                               00000002
+PSA                               00000003
+R                                 00000002
+RBIE                              00000003
+RBIF                              00000000
+RC8_9                             00000006
+RC9                               00000006
+RCD8                              00000000
+RCIE                              00000005
+RCIF                              00000005
+RCREG                             0000001A
+RCSTA                             00000018
+RD                                00000000
+READ_WRITE                        00000002
+RP0                               00000005
+RP1                               00000006
+RX9                               00000006
+RX9D                              00000000
+R_W                               00000002
+S                                 00000003
+SCS0                              00000000
+SCS1                              00000001
+SMP                               00000007
+SPBRG                             00000099
+SPEN                              00000007
+SREN                              00000005
+SSPADD                            00000093
+SSPBUF                            00000013
+MPASM 5.87                        ADCPIC.ASM   11-28-2023  14:03:44         PAGE 11
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+SSPCON                            00000014
+SSPEN                             00000005
+SSPIE                             00000003
+SSPIF                             00000003
+SSPM0                             00000000
+SSPM1                             00000001
+SSPM2                             00000002
+SSPM3                             00000003
+SSPOV                             00000006
+SSPSTAT                           00000094
+STATUS                            00000003
+SW1                               PORTB, 06
+SW2                               PORTB, 07
+SW3                               PORTA, 07
+SWDTE                             00000000
+SWDTEN                            00000000
+SYNC                              00000004
+SelectPA0ADC                      00000025
+SelectPA1ADC                      00000028
+SelectPA2ADC                      0000002B
+StartConvADC                      0000001C
+T0CS                              00000005
+T0SE                              00000004
+T1CKPS0                           00000004
+T1CKPS1                           00000005
+T1CON                             00000010
+T1INSYNC                          00000002
+T1OSCEN                           00000003
+T1RUN                             00000006
+T2CKPS0                           00000000
+T2CKPS1                           00000001
+T2CON                             00000012
+TMR0                              00000001
+TMR0IE                            00000005
+TMR0IF                            00000002
+TMR1CS                            00000001
+TMR1H                             0000000F
+TMR1IE                            00000000
+TMR1IF                            00000000
+TMR1L                             0000000E
+TMR1ON                            00000000
+TMR2                              00000011
+TMR2IE                            00000001
+TMR2IF                            00000001
+TMR2ON                            00000002
+TOUTPS0                           00000003
+TOUTPS1                           00000004
+TOUTPS2                           00000005
+TOUTPS3                           00000006
+TRISA                             00000085
+TRISB                             00000086
+TRMT                              00000001
+TUN0                              00000000
+MPASM 5.87                        ADCPIC.ASM   11-28-2023  14:03:44         PAGE 12
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+TUN1                              00000001
+TUN2                              00000002
+TUN3                              00000003
+TUN4                              00000004
+TUN5                              00000005
+TX8_9                             00000006
+TX9                               00000006
+TX9D                              00000000
+TXD8                              00000000
+TXEN                              00000005
+TXIE                              00000004
+TXIF                              00000004
+TXREG                             00000019
+TXSTA                             00000098
+UA                                00000001
+VCFG0                             00000004
+VCFG1                             00000005
+W                                 00000000
+WCOL                              00000007
+WDTCON                            00000105
+WDTPS0                            00000001
+WDTPS1                            00000002
+WDTPS2                            00000003
+WDTPS3                            00000004
+WR                                00000001
+WREN                              00000002
+WRERR                             00000003
+Z                                 00000002
+_BODEN_OFF                        00003FBF
+_BODEN_ON                         00003FFF
+_CCP1_RB0                         00003FFF
+_CCP1_RB3                         00002FFF
+_CONFIG1                          00002007
+_CONFIG2                          00002008
+_CPD_OFF                          00003FFF
+_CPD_ON                           00003EFF
+_CP_ALL                           00001FFF
+_CP_OFF                           00003FFF
+_DEBUG_OFF                        00003FFF
+_DEBUG_ON                         000037FF
+_EXTCLK                           00003FEF
+_EXTRC_CLKOUT                     00003FFF
+_EXTRC_IO                         00003FFE
+_FCMEN_OFF                        00003FFE
+_FCMEN_ON                         00003FFF
+_HS_OSC                           00003FEE
+_IESO_OFF                         00003FFD
+_IESO_ON                          00003FFF
+_INTRC_CLKOUT                     00003FFD
+_INTRC_IO                         00003FFC
+_LP_OSC                           00003FEC
+_LVP_OFF                          00003F7F
+_LVP_ON                           00003FFF
+MPASM 5.87                        ADCPIC.ASM   11-28-2023  14:03:44         PAGE 13
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+_MCLR_OFF                         00003FDF
+_MCLR_ON                          00003FFF
+_PWRTE_OFF                        00003FFF
+_PWRTE_ON                         00003FF7
+_WDT_OFF                          00003FFB
+_WDT_ON                           00003FFF
+_WRT_PROTECT_2048                 00003BFF
+_WRT_PROTECT_256                  00003DFF
+_WRT_PROTECT_ALL                  000039FF
+_WRT_PROTECT_OFF                  00003FFF
+_XT_OSC                           00003FED
+__16F88                           00000001
+main                              00000005
+pclath_temp                       00000073
+status_temp                       00000072
+vADCH                             00000020
+vADCL                             00000021
+w_temp                            00000071
+
+Errors   :     0
+Warnings :     0 reported,     0 suppressed
+Messages :     0 reported,     7 suppressed
+
+

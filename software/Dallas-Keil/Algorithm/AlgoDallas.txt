@@ -1,0 +1,139 @@
+DEBUT main()
+{
+  Increment = 5
+  stState = {MILIEU,MILIEU,MILIEU,MILIEU,OUVERTE}  
+  InitDallas()                   
+  InitLcd()
+  InitPositionBras()             
+  AfficheEcranBase()             
+  
+  while(1)
+  {
+    if(SequenceActive == Active)
+    {
+      stState.Base    = SeqData[Seq][Step][0] 
+      stState.Epaule  = SeqData[Seq][Step][1] 
+      stState.Coude   = SeqData[Seq][Step][2] 
+      stState.Poignet = SeqData[Seq][Step][3] 
+      stState.Pince   = SeqData[Seq][Step][4]
+    }
+    
+    ucTouche = ucReadKeyI2C()
+    if(ucTouche != ESPACE)
+    {
+      ucTraiteTouche()
+    }
+
+    if(TrameRecu)
+    {
+      Affiche "OnL"
+      TraiteTrame()
+    }
+
+    if(Pas de trame apres delai 300ms)
+    {
+      Affiche "OffL" ou 'X' si anime 
+    }
+
+    if(delai 200ms)
+    {
+      AfficheEtatSysteme()
+    }
+
+    if(SequenceActive == NonDemarre)
+    {
+      if(Une case membrane pesee)
+      {
+        Sequence = (0, 1 ou 2)
+        SequenceActive = Active
+      }
+    }
+    
+    if(delai 2sec)
+    {
+      TraiteSequence()
+    }
+
+  }
+
+} 
+FIN main()
+
+
+
+DEBUT ReadKeyI2C()
+{
+  ucTouche = ESPACE
+  if(INT == 0)
+  {
+    ucTouche = Lire8BitsI2C()
+  }
+  
+  return(Numero de la touche) 
+}
+FIN ReadKeyI2C()
+
+
+DEBUT TraiteTouche()
+{
+  switch(ucTouche)
+  {
+    '1': Moteur = BASE. 
+    '2': Moteur = EPAULE. 
+    '3': Moteur = COUDE. 
+    '4': Moteur = POIGNET. 
+    '5': Moteur = PINCE. 
+    '0': if(Increment < 17) {Increment = Increment + 4}
+         else               {Increment = 1}
+    '*': stState.ucBase = stState.ucBase - Increment
+    '#': stState.ucBase = stState.ucBase + Increment
+    'A': Partir une serie de mouvements qui permettrons de rechauffer les moteurs
+  }
+}
+FIN TraiteTouche()
+
+
+DEBUT TraiteTrame()
+{
+  Reanitialiser Compteur delai 300ms
+  
+  Sauvegarder dans la structure valeurs dans buffer reception 
+  
+  Transmet("G", "O", stState.Base, stState.Epaule, stState.Coude, stState.Poignet, stState.Pince, CheckSum)
+}
+FIN TraiteTrame()
+
+
+DEBUT AfficheEtat()
+{
+  Mettre a jour les informations sur l'écran LCD
+}
+FIN AfficheEtat()
+
+
+DEBUT TraiteSequence()
+{
+  if(SequenceActive == Active)
+  {
+    switch(Seq)
+    {
+      '0': prendre bloc case 1
+      '1': prendre bloc case 2
+      '2': prendre bloc case 3
+      '3': met le bloc sur la balance 
+      '4': place le bloc sur triage 20g
+      '5': place le bloc sur triage 50g
+      '6': place le bloc sur triage 70g
+      '7': bras en repos 
+
+    }
+  }
+}
+FIN TraiteSequence()
+
+
+ 
+
+  
+
+

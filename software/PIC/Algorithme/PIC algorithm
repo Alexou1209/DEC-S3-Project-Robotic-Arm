@@ -1,0 +1,126 @@
+
+DEBUT DU PROGRAMME
+  InitPIC()
+  InitRS232()
+  InitADC
+  I2CResetPCA9685()
+  I2CSetFreqPCA9685
+  Boucle = 127 * 256
+  
+  TANT QUE (VRAI)
+    Boucle --
+	  SI (Boucle == 0)
+	    Boucle = 127 * 256
+	    LireMembraneTactile()
+	    Pince = LirePince()
+	    Balance = LireBalance()
+	    TransmetTrame()
+	  FIN SI
+	  SI (Caractere reçu sur le port série)
+	    Car = LirePortSerie()
+		SI (Car == 'G')
+		  Car = LirePortSerie()
+		  SI (Car == 'O')
+		    Moteur0 = LirePortSerie()
+			Moteur1 = LirePortSerie()
+			Moteur2 = LirePortSerie()
+			Moteur3 = LirePortSerie()
+			Moteur4 = LirePortSerie()
+			CheckSum = LirePortSerie()
+			SI (Trame Valide)
+			  I2CSetPWMPCA9685 (0, Moteur0)
+			  I2CSetPWMPCA9685 (1, Moteur1)
+			  I2CSetPWMPCA9685 (2, Moteur2)
+			  I2CSetPWMPCA9685 (3, Moteur3)
+			  I2CSetPWMPCA9685 (4, Moteur4)
+			FIN SI (Trame Valide)
+		  FIN SI (Car == 'O')
+        FIN SI (Car == 'G')
+      FIN SI (Caractere reçu)
+  FIN TANT QUE
+FIN DU PROGRAMME  
+
+Pour le BUFFER CIRCULAIRE
+;Tableau de 8 éléments défini à une adresse connue.
+CBLOCK 0x20 
+vOctet1
+vOctet2
+vOctet3
+vOctet4
+vOctet5
+vOctet6
+vOctet7
+vOctet8
+endc
+
+;Pour permettre les interruptions de réception sur le port série.
+BANK1 
+bsf  INTCON, PEIE ; Autorise les interruptions de périphériques.
+bsf  PIE1  , RCIE ; Autorise les interruptions sur réception série.
+BANK0
+bsf  INTCON, GIE  ; Autorise les interruptions globales.
+
+;Routine d'interruption
+SI (PIR1, RCIF == 1)
+  Lire le caractère
+  PIR1, RCIF = 0 
+  FSR = ( ( vIndiceIN&0x07) + Position en mémoire de la trame)
+  Écrire en mémoire le caractère reçu
+  vIndiceIN = (vIndiceIN + 1) & 0x07)
+FIN SI
+
+;Buffer circulaire
+
+Si (vIndiceIN != vIndiceOUT)
+  Switch (vIndiceTrame)
+    Case 0 
+      LireChar1
+    Break
+    Case 1 
+      LireChar2
+    Break
+	Case 2 
+      LireChar3
+    Break
+	Case 3 
+      LireChar4
+    Break
+	Case 4 
+      LireChar5
+    Break
+	Case 5 
+      LireChar6
+    Break
+	Case 6 
+      LireChar7
+    Break
+    Case 7 
+      LireChar8
+    Break
+	
+  LireChar1
+  Initialiser FSR avec (vIndiceOUT + Position mémoire de la trame)
+  vRecu = Lire la case mémoire avec registre INDF
+  vIndiceOUT = ((vIndiceOUT + 1) & 0x07)
+  Effacer la case mémoire
+  Si (vRecu == ‘G’)
+    vIndiceTrame = ((vIndiceTrame + 1) & 0x07)
+  FIN SI
+  
+  LireChar2
+  Initialiser FSR avec (vIndiceOUT + Position mémoire de la trame)
+  vRecu = Lire la case mémoire
+  vIndiceOUT = ((vIndiceOUT + 1) & 0x07)
+  Effacer la case mémoire
+  Si (vRecu == ‘O’)
+    vIndiceTrame = ((vIndiceTrame + 1) & 0x07)
+  FIN SI  
+  
+  LireChar3
+  Initialiser FSR avec (vIndiceOUT + Position mémoire de la trame)
+  vMoteur0 = Lire la case mémoire
+  vIndiceOUT = ((vIndiceOUT + 1) & 0x07)
+  vIndiceTrame = ((vIndiceTrame + 1) & 0x07)
+
+; Même chose pour les moteurs 1, 2, 3 et 4. On devrait aussi vérifier le CS
+avant de placer les valeurs reçus dans les variables prévues aux 5 moteurs.

@@ -1,0 +1,193 @@
+C51 COMPILER V9.53.0.0   LCD                                                               12/18/2023 17:45:42 PAGE 1   
+
+
+C51 COMPILER V9.53.0.0, COMPILATION OF MODULE LCD
+OBJECT MODULE PLACED IN LCD.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE Dallas\LCD.c LARGE OPTIMIZE(8,SPEED) BROWSE DEBUG OBJECTEXTEND PRINT(.\L
+                    -CD.lst) OBJECT(LCD.obj)
+
+line level    source
+
+   1          #include "LCD.h"
+   2          
+   3          
+   4          
+   5          unsigned char xdata *PtrLCDConfig = 0x8000;
+   6          unsigned char xdata *PtrLCDChar = 0x8002;
+   7          unsigned char xdata *PtrLCDBusy = 0x8001;
+   8                  
+   9          // *************************************************************************************************
+  10          //  Auteur: Alexandre Dionne
+  11          //  Date de création :  22 septembre 2023
+  12          //  
+  13          //  Description          : Fonction qui configure le LCD sur la carte Dallas.
+  14          //  Paramètres d'entrées : Aucun
+  15          //  Paramètres de sortie : Aucun
+  16          //  Notes                                        : Aucune
+  17          //
+  18          void vLCDConfig(void)
+  19          // ************************************************************************************************
+  20          {
+  21   1              unsigned int i; 
+  22   1        
+  23   1              for(i = 0; i < 12000; i++);     //Delai d'activation de l'ecran au demarrage    
+  24   1          vAttendreBusyLcd();
+  25   1              *PtrLCDConfig = 0x38;
+  26   1              vAttendreBusyLcd();
+  27   1              *PtrLCDConfig = 0x0C;
+  28   1              vAttendreBusyLcd();
+  29   1              *PtrLCDConfig = 0x06;
+  30   1              vAttendreBusyLcd();     
+  31   1          vEffaceLCD();
+  32   1      }
+  33          
+  34          // *************************************************************************************************
+  35          //  Auteur: Alexandre Dionne
+  36          //  Date de création :  22 septembre 2023
+  37          //  
+  38          //  Description          : Fonction pour écrire un caractère sur le LCD.
+  39          //  Paramètres d'entrées : le caractère, la ligne et la colonne
+  40          //  Paramètres de sortie : Aucun
+  41          //  Notes                                        : Aucune
+  42          //
+  43          void vLCDEcrireCaract(unsigned char ucCaract, unsigned char ucLigne, unsigned char ucColonne)
+  44          // ************************************************************************************************
+  45          {
+  46   1        *PtrLCDConfig = ucLigne + ucColonne;
+  47   1        vAttendreBusyLcd();
+  48   1        *PtrLCDChar = ucCaract;
+  49   1        vAttendreBusyLcd();
+  50   1      }
+  51          
+  52          // *************************************************************************************************
+  53          //
+  54          //  Auteur: Stéphane Deschênes  
+C51 COMPILER V9.53.0.0   LCD                                                               12/18/2023 17:45:42 PAGE 2   
+
+  55          //  Date de création :  25 août 2019
+  56          //
+  57          //  Description                                  : Fonction qui verifie l'état du busy flag du LCD
+  58          //  Paramètres d'entrées : Aucun
+  59          //  Paramètres de sortie : Aucun
+  60          //  Notes                      : Aucune
+  61          void vAttendreBusyLcd(void)
+  62          // *************************************************************************************************
+  63          {
+  64   1              unsigned char i;
+  65   1              while ( *PtrLCDBusy & 0x80 )
+  66   1        {
+  67   2        };
+  68   1        for(i=0; i<10; i++);  
+  69   1      }
+  70          
+  71          // ************************************************************************************************
+  72          //
+  73          //  Auteur: Stéphane Deschênes  
+  74          //  Date de création :  25 août 2019
+  75          //
+  76          //  Description                                  : Fonction qui verifie l'état du busy flag du LCD
+  77          //  Paramètres d'entrées : Aucun
+  78          //  Paramètres de sortie : Aucun
+  79          //  Notes                      : Aucune
+  80          void vAfficheLigneLCD(unsigned char ucTab[21], unsigned char ucLigne)
+  81          // *************************************************************************************************
+  82          {
+  83   1              int i;
+  84   1              for(i=0; i<20; i++)
+  85   1              {
+  86   2                      vLCDEcrireCaract(ucTab[i], ucLigne,i);
+  87   2              }
+  88   1      }
+  89          
+  90          // ************************************************************************************************
+  91          //
+  92          //  Auteur: Stéphane Deschênes  
+  93          //  Date de création :  25 août 2019
+  94          //
+  95          //  Description                                  : Fonction qui verifie l'état du busy flag du LCD
+  96          //  Paramètres d'entrées : Aucun
+  97          //  Paramètres de sortie : Aucun
+  98          //  Notes                      : Aucune
+  99          void vAfficheLCDComplet(unsigned char ucTab[4][21])
+ 100          // *************************************************************************************************
+ 101          {
+ 102   1              unsigned char ucTabLigne[4] = {0x80, 0xC0, 0x94, 0xD4};
+ 103   1              int i;
+ 104   1              for(i=0; i<4; i++)
+ 105   1              {
+ 106   2                      vAfficheLigneLCD(&ucTab[i][0],ucTabLigne[i]);
+ 107   2              }
+ 108   1      }
+ 109          
+ 110          // ************************************************************************************************
+ 111          //
+ 112          //  Auteur: Alexandre Dionne    
+ 113          //  Date de création :  22 septembre 2023
+ 114          //
+ 115          //  Description                                  : Fonction qui efface tous les caractère sur le LCD
+ 116          //  Paramètres d'entrées : Aucun
+C51 COMPILER V9.53.0.0   LCD                                                               12/18/2023 17:45:42 PAGE 3   
+
+ 117          //  Paramètres de sortie : Aucun
+ 118          //  Notes                      : Aucune
+ 119          void vEffaceLCD(void)
+ 120          // *************************************************************************************************
+ 121          {
+ 122   1              vAttendreBusyLcd();
+ 123   1              *PtrLCDConfig = 0x01;
+ 124   1              vAttendreBusyLcd();
+ 125   1              *PtrLCDConfig = 0x02;
+ 126   1              vAttendreBusyLcd();
+ 127   1      }
+ 128          #ifdef CARACTERE_SPECIAUX
+              // ************************************************************************************************
+              //
+              //  Auteur: Alexandre Dionne    
+              //  Date de création :  22 septembre 2023
+              //
+              //  Description                                  : Fonction qui charge la CGRAM du LCD
+              //  Paramètres d'entrées : Aucun
+              //  Paramètres de sortie : Aucun
+              //  Notes                      : Aucune
+              void vLoadCGRAMLCD(unsigned char ucTab[8][8])
+              // *************************************************************************************************
+              {
+                      unsigned char ucCompteurCaract;
+                      unsigned char ucCompteurOctetsDansCaract;
+                      // Boucle pour chacun des 8 caractères
+                      for (ucCompteurCaract= 0; ucCompteurCaract < 8; ucCompteurCaract++)
+                      {
+                              // Boucle pour chacune des 8 lignes dans un caractère
+                              for(ucCompteurOctetsDansCaract = 0; ucCompteurOctetsDansCaract < 8;     ucCompteurOctetsDansCaract++)
+                              {
+                                      vAttendreBusyLcd();
+                                      *PtrLCDConfig = 0x40 + (8*ucCompteurCaract) + ucCompteurOctetsDansCaract;
+                                      vAttendreBusyLcd();
+                                      *PtrLCDChar = ucTab[ucCompteurCaract][ucCompteurOctetsDansCaract];
+                              }
+                      }
+              }
+              #endif
+ 157          
+ 158          
+ 159          
+ 160          
+ 161          
+ 162          
+ 163          
+ 164          
+ 165          
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    376    ----
+   CONSTANT SIZE    =      4    ----
+   XDATA SIZE       =      6      16
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

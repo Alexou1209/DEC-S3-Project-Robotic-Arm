@@ -1,0 +1,85 @@
+C51 COMPILER V9.53.0.0   FRAME                                                             11/29/2023 15:42:33 PAGE 1   
+
+
+C51 COMPILER V9.53.0.0, COMPILATION OF MODULE FRAME
+OBJECT MODULE PLACED IN Frame.OBJ
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE Frame.c OPTIMIZE(8,SPEED) BROWSE DEBUG OBJECTEXTEND TABS(2)
+
+line level    source
+
+   1          //////////////////////////////////////////////////////////////////////////////
+   2          //
+   3          //  Fichier:     
+   4          //
+   5          //  Description: - 
+   6          //               
+   7          //
+   8          //  Programmeur: 
+   9          //
+  10          //  Date:        
+  11          //
+  12          //  Compilateur: Keil 9.53  (uVision 5)
+  13          //
+  14          //  Modification:
+  15          //        
+  16          //
+  17          //////////////////////////////////////////////////////////////////////////////
+  18          
+  19          
+  20          #include "MonDallas.h"      // Declaration des registres de fonctions speciales 
+  21                                     // pour la famille Dallas DS89C4xx       
+  22          
+  23          #include <stdio.h>         // Predeclaration des fonctions d'entree/sortie
+  24                                     // pour utiliser printf( ) et getchar( )
+  25          void vInitVitessePortSerie(unsigned long fVitesse, unsigned long fFreq);
+  26          
+  27          
+  28          void main (void) 
+  29          {
+  30   1       // Placer la declaration de vos variables ici.
+  31   1        vInitVitessePortSerie(19200,11059200);
+  32   1      
+  33   1        printf("Bonjour");
+  34   1        while (1)
+  35   1        {
+  36   2           // Votre programme ici.
+  37   2        }
+  38   1      }   // Fin du main().
+  39          
+  40          //******************************************************************************
+  41          // Nom de la fct:   vInitPortSerie                    Fait par: Pierre Chouinard
+  42          // Date:            17 Decembre 2008
+  43          // Revision :       A   
+  44          // Prototype:       void vInitPortSerie(void)
+  45          // Description:     Cette fonction configure le port serie 0 avec timer 1
+  46          //                  pour le baudrate demande, en N, 8, 1, sans interruption.
+  47          // Exemple d'appel: vInitVitessePortSerie(57600,11059200);
+  48          //******************************************************************************
+  49          void vInitVitessePortSerie(unsigned long fVitesse, unsigned long fFreq)
+  50          {
+  51   1        SCON0 = 0x50;                     // Selectione mode 1, 8-bit avec reception      
+  52   1        PCON  = PCON | 0x80;              // SMOD = 1 pour doubler la vitesse port serie 
+  53   1        TMOD  = TMOD & 0x0F;              // timer 1, en timer mode 2, 
+  54   1        TMOD  = TMOD | 0x20;              // 8-bit auto-reload        
+  55   1        TH1   = (char) 256-(fFreq/16/12/fVitesse); // a 11.0592MHz: avec SMOD = 1
+C51 COMPILER V9.53.0.0   FRAME                                                             11/29/2023 15:42:33 PAGE 2   
+
+  56   1                                                   // FA=9600,
+  57   1                                                   //FD=19200, FE=28800 et FF=57600    
+  58   1        TR1   = 1;                        // Active le timer 1                          
+  59   1        TI_0  = 1;                        // Met TI a 1 pour un premier charactere    
+  60   1      }// Fin --- vInitPortSerie()
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    101    ----
+   CONSTANT SIZE    =      8    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----       8
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

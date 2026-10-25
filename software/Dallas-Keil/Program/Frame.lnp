@@ -1,0 +1,8 @@
+"ClavierI2C.obj",
+"I2C.obj",
+"Interrupt.obj",
+"LCD.obj",
+"Dallas.obj",
+"Main.obj" 
+TO "Frame" 
+RAMSIZE(256) 

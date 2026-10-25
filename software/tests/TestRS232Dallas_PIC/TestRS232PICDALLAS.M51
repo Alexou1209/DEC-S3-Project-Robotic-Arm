@@ -1,0 +1,166 @@
+BL51 BANKED LINKER/LOCATER V6.22                                                        11/29/2023  15:42:33  PAGE 1
+
+
+BL51 BANKED LINKER/LOCATER V6.22, INVOKED BY:
+C:\KEIL_V5\C51\BIN\BL51.EXE Frame.obj TO TestRS232PICDALLAS RAMSIZE (256)
+
+
+MEMORY MODEL: SMALL
+
+
+INPUT MODULES INCLUDED:
+  Frame.obj (FRAME)
+  C:\KEIL_V5\C51\LIB\C51S.LIB (?C_STARTUP)
+  C:\KEIL_V5\C51\LIB\C51S.LIB (?C?ULDIV)
+  C:\KEIL_V5\C51\LIB\C51S.LIB (PRINTF)
+  C:\KEIL_V5\C51\LIB\C51S.LIB (?C?CLDPTR)
+  C:\KEIL_V5\C51\LIB\C51S.LIB (?C?CLDOPTR)
+  C:\KEIL_V5\C51\LIB\C51S.LIB (?C?CSTPTR)
+  C:\KEIL_V5\C51\LIB\C51S.LIB (?C?PLDIIDATA)
+  C:\KEIL_V5\C51\LIB\C51S.LIB (?C?CCASE)
+  C:\KEIL_V5\C51\LIB\C51S.LIB (PUTCHAR)
+
+
+LINK MAP OF MODULE:  TestRS232PICDALLAS (FRAME)
+
+
+            TYPE    BASE      LENGTH    RELOCATION   SEGMENT NAME
+            -----------------------------------------------------
+
+            * * * * * * *   D A T A   M E M O R Y   * * * * * * *
+            REG     0000H     0008H     ABSOLUTE     "REG BANK 0"
+            DATA    0008H     0014H     UNIT         _DATA_GROUP_
+                    001CH     0004H                  *** GAP ***
+            BIT     0020H.0   0001H.1   UNIT         _BIT_GROUP_
+                    0021H.1   0000H.7                *** GAP ***
+            IDATA   0022H     0001H     UNIT         ?STACK
+
+            * * * * * * *   C O D E   M E M O R Y   * * * * * * *
+            CODE    0000H     0003H     ABSOLUTE     
+            CODE    0003H     035CH     UNIT         ?PR?PRINTF?PRINTF
+            CODE    035FH     015CH     UNIT         ?C?LIB_CODE
+            CODE    04BBH     0043H     UNIT         ?PR?_VINITVITESSEPORTSERIE?FRAME
+            CODE    04FEH     0027H     UNIT         ?PR?PUTCHAR?PUTCHAR
+            CODE    0525H     0022H     UNIT         ?PR?MAIN?FRAME
+            CODE    0547H     000CH     UNIT         ?C_C51STARTUP
+            CODE    0553H     0008H     UNIT         ?CO?FRAME
+
+
+
+OVERLAY MAP OF MODULE:   TestRS232PICDALLAS (FRAME)
+
+
+SEGMENT                                     BIT_GROUP          DATA_GROUP 
+  +--> CALLED SEGMENT                    START    LENGTH     START    LENGTH
+----------------------------------------------------------------------------
+?C_C51STARTUP                            -----    -----      -----    -----
+  +--> ?PR?MAIN?FRAME
+
+?PR?MAIN?FRAME                           -----    -----      -----    -----
+  +--> ?PR?_VINITVITESSEPORTSERIE?FRAME
+  +--> ?CO?FRAME
+BL51 BANKED LINKER/LOCATER V6.22                                                      11/29/2023  15:42:33  PAGE 2
+
+
+  +--> ?PR?PRINTF?PRINTF
+
+?PR?_VINITVITESSEPORTSERIE?FRAME         -----    -----      0008H    0008H
+
+?PR?PRINTF?PRINTF                        0020H.0  0001H.1    0008H    0014H
+  +--> ?PR?PUTCHAR?PUTCHAR
+
+
+
+SYMBOL TABLE OF MODULE:  TestRS232PICDALLAS (FRAME)
+
+  VALUE           TYPE          NAME
+  ----------------------------------
+
+  -------         MODULE        FRAME
+  C:0000H         SYMBOL        _ICE_DUMMY_
+  D:00A8H         PUBLIC        IE
+  D:00F8H         PUBLIC        EIP0
+  C:04BBH         PUBLIC        _vInitVitessePortSerie
+  C:0525H         PUBLIC        main
+  B:0098H.1       PUBLIC        TI_0
+  D:0087H         PUBLIC        PCON
+  D:0089H         PUBLIC        TMOD
+  D:0088H         PUBLIC        TCON
+  D:00B8H         PUBLIC        IP0
+  D:008DH         PUBLIC        TH1
+  D:00E8H         PUBLIC        EIE
+  B:0088H.6       PUBLIC        TR1
+  D:0098H         PUBLIC        SCON0
+  D:00C0H         PUBLIC        SCON1
+  D:00C8H         PUBLIC        T2CON
+  D:00D0H         PUBLIC        PSW
+  D:00D8H         PUBLIC        WDCON
+  -------         PROC          MAIN
+  C:0525H         LINE#         28
+  C:0525H         LINE#         29
+  C:0525H         LINE#         31
+  C:053CH         LINE#         33
+  C:0545H         LINE#         34
+  C:0545H         LINE#         35
+  C:0545H         LINE#         37
+  -------         ENDPROC       MAIN
+  -------         PROC          _VINITVITESSEPORTSERIE
+  D:0008H         SYMBOL        fVitesse
+  D:000CH         SYMBOL        fFreq
+  C:04BBH         LINE#         49
+  C:04C3H         LINE#         50
+  C:04C3H         LINE#         51
+  C:04C6H         LINE#         52
+  C:04C9H         LINE#         53
+  C:04CCH         LINE#         54
+  C:04CFH         LINE#         55
+  C:04F9H         LINE#         58
+  C:04FBH         LINE#         59
+  C:04FDH         LINE#         60
+  -------         ENDPROC       _VINITVITESSEPORTSERIE
+  -------         ENDMOD        FRAME
+BL51 BANKED LINKER/LOCATER V6.22                                                      11/29/2023  15:42:33  PAGE 3
+
+
+
+  -------         MODULE        ?C?ULDIV
+  C:039BH         PUBLIC        ?C?ULDIV
+  -------         ENDMOD        ?C?ULDIV
+
+  -------         MODULE        PRINTF
+  D:0008H         PUBLIC        ?_PRINTF517?BYTE
+  D:0008H         PUBLIC        ?_PRINTF?BYTE
+  D:0008H         PUBLIC        ?_SPRINTF517?BYTE
+  D:0008H         PUBLIC        ?_SPRINTF?BYTE
+  C:0065H         PUBLIC        _PRINTF
+  C:0065H         PUBLIC        _PRINTF517
+  C:005FH         PUBLIC        _SPRINTF
+  C:005FH         PUBLIC        _SPRINTF517
+  -------         ENDMOD        PRINTF
+
+  -------         MODULE        ?C?CLDPTR
+  C:042DH         PUBLIC        ?C?CLDPTR
+  -------         ENDMOD        ?C?CLDPTR
+
+  -------         MODULE        ?C?CLDOPTR
+  C:0446H         PUBLIC        ?C?CLDOPTR
+  -------         ENDMOD        ?C?CLDOPTR
+
+  -------         MODULE        ?C?CSTPTR
+  C:0473H         PUBLIC        ?C?CSTPTR
+  -------         ENDMOD        ?C?CSTPTR
+
+  -------         MODULE        ?C?PLDIIDATA
+  C:0485H         PUBLIC        ?C?PLDIIDATA
+  -------         ENDMOD        ?C?PLDIIDATA
+
+  -------         MODULE        ?C?CCASE
+  C:0495H         PUBLIC        ?C?CCASE
+  -------         ENDMOD        ?C?CCASE
+
+  -------         MODULE        PUTCHAR
+  C:04FEH         PUBLIC        _PUTCHAR
+  -------         ENDMOD        PUTCHAR
+
+Program Size: data=30.1 xdata=0 code=1371
+LINK/LOCATE RUN COMPLETE.  0 WARNING(S),  0 ERROR(S)

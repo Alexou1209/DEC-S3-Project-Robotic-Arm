@@ -1,0 +1,2095 @@
+MPASM 5.87                          MAIN.ASM   12-18-2023  17:19:35         PAGE  1
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+                      00001 ;******************************************************************************
+                      00002 ;                                                                             *
+                      00003 ;    Filename:      Main.asm                                                  *
+                      00004 ;    Date:          17 décembre 2023                                          *
+                      00005 ;    File Version:  V1                                                        *
+                      00006 ;                                                                             *
+                      00007 ;    Author:        Marie-Pier Morin, Félix Tremblay et Alexandre Dionne      *
+                      00008 ;                                                                             *
+                      00009 ;******************************************************************************
+                      00010 ;                                                                             *
+                      00011 ;    Files required: FonctionsPCA9685.asm, FonctionsRS-232.asm,               *
+                      00012 ;                    FonctionsBras.asm, FonctionDelai.asm, FonctionsI2C.asm,  *
+                      00013 ;                    FonctionsADC.asm                                         *
+                      00014 ;                                                                             *
+                      00015 ;******************************************************************************
+                      00016 ;                                                                             *
+                      00017 ;    Notes:                                                                   *
+                      00018 ;                                                                             *
+                      00019 ;                                                                             *
+                      00020 ;                                                                             *
+                      00021 ;                                                                             *
+                      00022 ;******************************************************************************
+                      00023 
+                      00024 ;***********************DIAGRAMME DU CONTROLEUR********************************
+                      00025 ;                                                                     
+                      00026 ;                     IN  IN  S3  IN      S2  S1  TX  D2            S: Switch 
+                      00027 ;                     A1  A0  A7  A6 VDD  B7  B6  B5  B4              
+                      00028 ;                    ____________________________________             
+                      00029 ;           PIN     | 18  17  16  15  14  13  12  11  10 |            
+                      00030 ;                   |               16C88                |            
+                      00031 ;           PIN     | 1   2   3  _4_  5   6   7   8   9  |            
+                      00032 ;                    ------------------------------------             
+                      00033 ;                     A2  A3  A4  A5 VSS  B0  B1  B2  B3              
+                      00034 ;                     IN  IN  IN  MCL     SCL SDA RX  D1            D: Del  
+                      00035 ;
+                      00036 ;******************************************************************************
+                      00037 
+                      00038      LIST      p=16f88          ; Liste des directives du processeur.
+                      00039      #include <p16F88.inc>      ; Définition des registres spécifiques au CPU.
+                      00001         LIST
+                      00002 
+                      00003 ;==========================================================================
+                      00004 ; Build date : Jan 06 2020
+                      00005 ;  MPASM PIC16F88 processor include
+                      00006 ; 
+                      00007 ;  (c) Copyright 1999-2020 Microchip Technology, All rights reserved
+                      00008 ;==========================================================================
+                      00009 
+                      00550         LIST
+                      00040 
+                      00041      errorlevel  -302           ; Retrait du message d'erreur 302.
+                      00042 
+2007   3F70           00043      __CONFIG    _CONFIG1, _CP_OFF & _CCP1_RB0 & _DEBUG_OFF & _WRT_PROTECT_OFF & _CPD_OFF & _LVP_OFF & _
+MPASM 5.87                          MAIN.ASM   12-18-2023  17:19:35         PAGE  2
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+                            BODEN_ON & _MCLR_ON & _PWRTE_ON & _WDT_OFF & _INTRC_IO
+                      00044 
+2008   3FFC           00045      __CONFIG    _CONFIG2, _IESO_OFF & _FCMEN_OFF
+                      00046 
+                      00047 ;*********************************** DEFINES **********************************
+                      00048 #define      BANK0   bcf       STATUS,RP0;
+                      00049 #define      BANK1   bsf       STATUS,RP0;
+                      00050 #define      CARRY             STATUS,C
+                      00051 #define      ZERO              STATUS,Z
+                      00052 ;*********************************** KIT-PIC **********************************
+                      00053 #define      SW1               PORTB,6
+                      00054 #define      SW2               PORTB,7
+                      00055 #define      SW3               PORTA,7
+                      00056 #define      DEL1              PORTB,3
+                      00057 #define      DEL2              PORTB,4
+                      00058 ;************************************ I2C *************************************
+                      00059 #define      SCL               PORTB,0
+                      00060 #define      SDA               PORTB,1
+                      00061 #define      BITSDA            v1Bit,0
+                      00062 #define      OCTET             vOctet,7
+                      00063 ;*********************************** RS-232 ***********************************
+                      00064 #define     FLAGRX             vFlag,0
+                      00065 #define     FLAGTX             vFlag,1
+                      00066 #define     FLAGFINTRAME       vFlag,2
+                      00067 #define     FLAGTRAMEOK        vFlag,3
+                      00068 ;*********************************** Timer ************************************
+                      00069 #define     FLAG100MS          vFlag,4
+                      00070 ;***** VARIABLE DEFINITIONS  **************************************************
+                      00071 
+                      00072   CBLOCK  0x20
+                      00073 ;Variables communication RS-232
+  00000020            00074   vOctet0                       ; Variables utilisées pour 
+  00000021            00075   vOctet1                       ; le stockage temporaire des
+  00000022            00076   vOctet2                       ; octets reçu par communication
+  00000023            00077   vOctet3                       ; RS-232.
+  00000024            00078   vOctet4                       ; Placées de l'adresse 0x20 
+  00000025            00079   vOctet5                       ; à 0x27 pour pouvoir modifier
+  00000026            00080   vOctet6                       ; leurs valeurs de manière
+  00000027            00081   vOctet7                       ; indirecte
+  00000028            00082   vIndiceIN                     ; Nombre d'éléments reçu non traités
+  00000029            00083   vIndiceOUT                    ; Nombre d'éléments reçu traités
+  0000002A            00084   vOctetG                       ; Octet de début de trame
+  0000002B            00085   vOctetO                       ; 2e octet de début de trame
+  0000002C            00086   vCheckSum                     ; Octet de fin de trame pour vérifier 
+                      00087                                 ; la validité de celle-ci
+                      00088 ;Variables fonctions I2C 
+  0000002D            00089   v1Bit                         ; Variable Bit
+  0000002E            00090   vOctet                        ; Variable Octets
+  0000002F            00091   vAckValue                     ; Valeur du Ack/NoAck envoyé
+  00000030            00092   vAddH                         ; Adresse basse
+  00000031            00093   vAddB                         ; Adresse haute
+  00000032            00094   vData                         ; Donnée à envoyer
+  00000033            00095   vCompteur                     ; Utilisée pour les boucles I2C
+MPASM 5.87                          MAIN.ASM   12-18-2023  17:19:35         PAGE  3
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+  00000034            00096   vCompt1ms                     ; Compteur pour le délai 1ms
+  00000035            00097   vCompt5ms                     ; Compteur pour le délai 5ms
+                      00098   
+                      00099 ;Variables Fonctions ADC
+  00000036            00100   vADCL                         ; Valeur basse de l'ADC
+  00000037            00101   vADCH                         ; Valeur haute de l'ADC
+                      00102 
+                      00103 ;Variables fonctions PCA9685
+  00000038            00104   vPWM                          ; Valeur basse du PWM
+  00000039            00105   vPWMH                         ; Valeur haute du PWM
+  0000003A            00106   vMoteurPCA                    ; Moteur sélectionné
+                      00107   
+                      00108 ;Variables Fonctions bras robotisé
+  0000003B            00109   vPaveX                        ; Valeurs lue du pavé sur l'axe X
+  0000003C            00110   vPaveY                        ; Valeurs lue du pavé sur l'axe Y
+  0000003D            00111   vPince                        ; Valeurs lue de la pince
+  0000003E            00112   vBalance                      ; Valeurs lue de la balance 
+  0000003F            00113   vMoteur0                      ; Position du moteur 0 (base)
+  00000040            00114   vMoteur1                      ; Position du moteur 1 (épaule)
+  00000041            00115   vMoteur2                      ; Position du moteur 2 (coude)
+  00000042            00116   vMoteur3                      ; Position du moteur 3 (poignet)
+  00000043            00117   vMoteur4                      ; Position du moteur 4 (pince)
+                      00118   
+                      00119 ;Variables autres
+  00000044            00120   vFlag                         ; différents flag utilisés dans le programme
+                      00121 
+                      00122   endc
+                      00123 
+                      00124 ;***************************VECTEUR DE RESET***********************************
+                      00125      ORG     0x000             ; Processor reset vector
+0000   018A           00126      clrf    PCLATH            ; Page 0 (a cause du BootLoader)
+0001   2???           00127      goto    Main              ;       
+                      00128 
+                      00129 ;***********************VECTEUR D'INTERRUPTION*********************************    
+                      00130      ORG     0x004             ; Interrupt vector location
+0004   2???           00131      goto    Interruption         
+                      00132              
+                      00133 ;**************************PROGRAMME PRINCIPAL*********************************
+                      00134              
+0005                  00135 Main         
+0005   2???           00136     call    InitPic             ; Initialise PIC et place les ports en IN/OUT
+0006   2???           00137     call    InitRS232           ; Initialise la communication RS232 du PIC 
+0007   2???           00138     call    InitADC             ; Initialise l'ADC du PIC
+0008   2???           00139     call    ResetPCA9685        ; Initialise la carte PCA9685
+0009   2???           00140     call    SetFreqPCA9685
+                      00141    
+000A   01C4           00142     clrf    vFlag               ; Tous les flag à 0
+000B   3020           00143     movlw   0x20                
+000C   00A8           00144     movwf   vIndiceIN           ; Valeur initiale de vIndiceIN (0x20)
+000D   00A9           00145     movwf   vIndiceOUT          ; Valeur initiale de vIndiceOUT (0x20)
+                      00146     
+000E   100C           00147     bcf    PIR1,TMR1IF          ; Mets le flag du timer 1 a 0
+000F   128C           00148     bcf    PIR1,RCIF            ; Mets le flag de la reception RS-232 a 0
+MPASM 5.87                          MAIN.ASM   12-18-2023  17:19:35         PAGE  4
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+0010   1683           00149     BANK1                       
+0011   168C           00150     bsf     PIE1,RCIE           ; Activation des interruptions en reception
+0012   140C           00151     bsf     PIE1,TMR1IE         ; Activation des interruptions du timer1
+0013   170B           00152     bsf     INTCON,PEIE         ; Activation des interruptions des périphérique
+0014   178B           00153     bsf     INTCON,GIE          ; Activation des inyterruptions globales
+0015   1283           00154     BANK0
+                      00155     
+0016   2???           00156     call    InitTimer1          ; Initialise le timer1 a 100ms de délai
+                      00157     
+0017                  00158 Loop
+0017   0829           00159     movfw   vIndiceOUT
+0018   0228           00160     subwf   vIndiceIN,W         
+0019   1D03           00161     btfss   ZERO                ; Si vIndiceIN différent de vIndiceOUT
+001A   2???           00162     call    TraiterCaractere    ; Traite les caractères reçus
+001B   19C4           00163     btfsc   FLAGTRAMEOK         ; Si la trame reçu est valide
+001C   2???           00164     call    BougerMoteurs       ; Déplace les moteurs aux nouvelles positions
+001D   0000           00165     nop
+001E   1A44           00166     btfsc   FLAG100MS           ; Si 100ms de délai
+001F   2???           00167     call    EnvoyerTrameDallas  ; Envoie de la trame à la carte Dallas
+0020   2???           00168     goto    Loop                ; Boucle infini
+                      00169    
+                      00170 ;******************************* ROUTINES *************************************
+                      00171 
+                      00172 ;******************************* InitPic **************************************
+                      00173 ;       Nom de la fonction : InitPic                    
+                      00174 ;       Auteur : Alain Champagne
+                      00175 ;       Date de creation : 23-09-2018                                
+                      00176 ;       Description :      Routine d'initiation des registres du PIC.
+                      00177 ;                          - RP1 à 0 pour être toujours dans Bank 0 et 1,
+                      00178 ;                          - Désactiver les interruptions,
+                      00179 ;                          - Désactiver les entrées analogiques,
+                      00180 ;                          - PortA en entrée,
+                      00181 ;                          - PortB en entrée sauf: Bits I2C et LEDs en sortie.
+                      00182 ;                                                       
+                      00183 ;       Fonctions appelees : NA 
+                      00184 ;       Paramètres d'entree : NA  
+                      00185 ;       Paramètres de sortie : NA 
+                      00186 ;       Variables utilisees : NA  
+                      00187 ;       Include : Fichier P16F88.inc
+                      00188 ;       Equates : NA
+                      00189 ;       #Defines : BANK0, BANK1 
+                      00190 ;                                               
+                      00191 ;******************************************************************************
+0021                  00192 InitPic
+0021   1303           00193      bcf     STATUS, RP1        ; Pour s'assurer d'être dans les bank 0 et 1 
+0022   1683           00194      BANK1                      ; Select Bank1        
+0023   138B           00195      bcf     INTCON,GIE         ; Désactive les interruptions        
+0024   019B           00196      clrf    ANSEL              ; Désactive les convertisseurs reg ANSEL 0x9B        
+0025   3078           00197      movlw   b'01111000'        ; osc internal 8 Mhz
+0026   008F           00198      movwf   OSCCON
+0027   30FF           00199      movlw   b'11111111'        ; Remplacer les x par des 1 ou 0.
+0028   0085           00200      movwf   TRISA              ; PortA en entree         
+0029   30E4           00201      movlw   b'11100100'        ; Bits en entrées sauf,
+MPASM 5.87                          MAIN.ASM   12-18-2023  17:19:35         PAGE  5
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+002A   0086           00202      movwf   TRISB              ; RB3 (Led1), RB4 (Led2) en sortie. 
+002B   1283           00203      BANK0                      ; Select Bank0
+002C   0008           00204      return
+                      00205 ; fin routine InitPic ---------------------------------------------------------
+                      00206 
+                      00207 #include    <FonctionsPCA9685.asm> 
+                      00001 ;****************************** ResetPCA9685 **********************************
+                      00002 ;       Nom de la fonction : ResetPCA9685                 
+                      00003 ;       Auteur : Félix Trempblay, Marie-Pier Morin, Alexandre Dionne         
+                      00004 ;       Date de creation : 16-11-2023                             
+                      00005 ;       Description : Fonction qui réinitialise la carte PCA9685                          
+                      00006 ;                       
+                      00007 ;                                                       
+                      00008 ;       Fonctions appelees : StartBitI2C, StopBitI2C, Ecrire8BitsI2C          
+                      00009 ;       Paramètres d'entree : Aucun              
+                      00010 ;       Paramètres de sortie : Aucun          
+                      00011 ;       Variables utilisees : vOctet                
+                      00012 ;                                               
+                      00013 ;******************************************************************************
+002D                  00014 ResetPCA9685
+002D   2???           00015     call    StartBitI2C
+                      00016     
+002E   3000           00017     movlw   0x00
+002F   00AE           00018     movwf   vOctet
+0030   2???           00019     call    Ecrire8BitsI2C
+                      00020     
+0031   3006           00021     movlw   0x06
+0032   00AE           00022     movwf   vOctet  
+0033   2???           00023     call    Ecrire8BitsI2C
+                      00024     
+0034   2???           00025     call    StopBitI2C
+                      00026     
+0035   0008           00027     return
+                      00028 ; fin routine ResetPCA9685 ----------------------------------------------------
+                      00029     
+                      00030 ;***************************** SetFreqPCA9685 *********************************
+                      00031 ;       Nom de la fonction : SetFreqPCA9685                 
+                      00032 ;       Auteur : Félix Trempblay, Marie-Pier Morin, Alexandre Dionne         
+                      00033 ;       Date de creation : 16-11-2023                             
+                      00034 ;       Description : Fonction qui détermine la fréquence du PCA9685 à 50Hz 
+                      00035 ;                       
+                      00036 ;                                                                            
+                      00037 ;       Fonctions appelees : StartBitI2C, StopBitI2C, Ecrire8BitsI2C          
+                      00038 ;       Paramètres d'entree : Aucun            
+                      00039 ;       Paramètres de sortie : Aucun          
+                      00040 ;       Variables utilisees : vOctet               
+                      00041 ;                                               
+                      00042 ;******************************************************************************
+0036                  00043 SetFreqPCA9685
+0036   2???           00044     call    StartBitI2C
+                      00045     
+0037   3080           00046     movlw   0x80    
+0038   00AE           00047     movwf   vOctet
+MPASM 5.87                          MAIN.ASM   12-18-2023  17:19:35         PAGE  6
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+0039   2???           00048     call    Ecrire8BitsI2C
+                      00049     
+003A   3000           00050     movlw   0x00
+003B   00AE           00051     movwf   vOctet  
+003C   2???           00052     call    Ecrire8BitsI2C
+                      00053     
+003D   3010           00054     movlw   0x10    
+003E   00AE           00055     movwf   vOctet
+003F   2???           00056     call    Ecrire8BitsI2C
+                      00057     
+0040   2???           00058     call    StopBitI2C
+0041   2???           00059     call    StartBitI2C
+                      00060     
+0042   3080           00061     movlw   0x80    
+0043   00AE           00062     movwf   vOctet
+0044   2???           00063     call    Ecrire8BitsI2C
+                      00064     
+0045   30FE           00065     movlw   0xFE   
+0046   00AE           00066     movwf   vOctet
+0047   2???           00067     call    Ecrire8BitsI2C
+                      00068     
+0048   3079           00069     movlw   0x79    
+0049   00AE           00070     movwf   vOctet
+004A   2???           00071     call    Ecrire8BitsI2C
+                      00072     
+004B   2???           00073     call    StopBitI2C
+004C   2???           00074     call    StartBitI2C
+                      00075     
+004D   3080           00076     movlw   0x80    
+004E   00AE           00077     movwf   vOctet
+004F   2???           00078     call    Ecrire8BitsI2C
+                      00079     
+0050   3000           00080     movlw   0x00    
+0051   00AE           00081     movwf   vOctet
+0052   2???           00082     call    Ecrire8BitsI2C
+                      00083     
+0053   30A0           00084     movlw   0xA0    
+0054   00AE           00085     movwf   vOctet
+0055   2???           00086     call    Ecrire8BitsI2C
+                      00087     
+0056   2???           00088     call   StopBitI2C 
+                      00089     
+0057   0008           00090     return
+                      00091 ; fin routine SetFreqPCA9685 --------------------------------------------------
+                      00092     
+                      00093 ;****************************** SetPWMPCA9685 *********************************
+                      00094 ;       Nom de la fonction : SetPWMPCA9685                 
+                      00095 ;       Auteur : Félix Trempblay, Marie-Pier Morin, Alexandre Dionne         
+                      00096 ;       Date de creation : 16-11-2023                             
+                      00097 ;       Description : Fonction qui selectionne le moteur et indique la 
+                      00098 ;                     position de celui-ci   
+                      00099 ;                       
+                      00100 ;                                                                            
+MPASM 5.87                          MAIN.ASM   12-18-2023  17:19:35         PAGE  7
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+                      00101 ;       Fonctions appelees : StartBitI2C, StopBitI2C, Ecrire8BitsI2C           
+                      00102 ;       Paramètres d'entree : Aucun             
+                      00103 ;       Paramètres de sortie : Aucun           
+                      00104 ;       Variables utilisees : voctet, vMoteurPCA, vPWM, vPWMH                
+                      00105 ;                                               
+                      00106 ;******************************************************************************
+0058                  00107 SetPWMPCA9685
+0058   1003           00108     bcf     CARRY
+Message[305]: Using default destination of 1 (file).
+0059   0DBA           00109     rlf     vMoteurPCA
+Message[305]: Using default destination of 1 (file).
+005A   0DBA           00110     rlf     vMoteurPCA
+005B   3006           00111     movlw   .6
+Message[305]: Using default destination of 1 (file).
+005C   07BA           00112     addwf   vMoteurPCA
+005D   1003           00113     bcf     CARRY
+005E   30CD           00114     movlw   .205
+Message[305]: Using default destination of 1 (file).
+005F   07B8           00115     addwf   vPWM
+0060   01B9           00116     clrf    vPWMH
+0061   1C03           00117     btfss   CARRY
+0062   2???           00118     goto    AddH0
+0063   2???           00119     goto    AddH1
+                      00120     
+0064                  00121 AddH1
+0064   1439           00122     bsf     vPWMH,0
+0065   2???           00123     goto    Communication
+                      00124     
+0066                  00125 AddH0
+0066   1039           00126     bcf     vPWMH,0
+                      00127     
+0067                  00128 Communication
+0067   2???           00129     call    StartBitI2C
+                      00130     
+0068   3080           00131     movlw   0x80    
+0069   00AE           00132     movwf   vOctet
+006A   2???           00133     call    Ecrire8BitsI2C
+                      00134     
+006B   083A           00135     movfw   vMoteurPCA
+006C   00AE           00136     movwf   vOctet
+006D   2???           00137     call    Ecrire8BitsI2C
+                      00138    
+006E   3000           00139     movlw   0x00    
+006F   00AE           00140     movwf   vOctet
+0070   2???           00141     call    Ecrire8BitsI2C
+                      00142     
+0071   3000           00143     movlw   0x00    
+0072   00AE           00144     movwf   vOctet
+0073   2???           00145     call    Ecrire8BitsI2C
+                      00146     
+0074   0838           00147     movfw   vPWM
+0075   00AE           00148     movwf   vOctet
+0076   2???           00149     call    Ecrire8BitsI2C
+MPASM 5.87                          MAIN.ASM   12-18-2023  17:19:35         PAGE  8
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+                      00150     
+0077   0839           00151     movfw   vPWMH
+0078   00AE           00152     movwf   vOctet
+0079   2???           00153     call    Ecrire8BitsI2C
+                      00154     
+007A   2???           00155     call   StopBitI2C 
+                      00156     
+007B   0008           00157     return
+                      00158 ; fin routine SetPWMPCA9685 ---------------------------------------------------
+                      00208 #include    <FonctionsRS-232.asm>
+                      00001 ;*********************************InitRS232************************************
+                      00002 ;       Nom de la fonction : InitRS232                  
+                      00003 ;       Auteur : Pierre Chouinard               
+                      00004 ;       Date de création : 10-10-2009   
+                      00005 ;       Date de modification : 21-07-2018       A.C.                                          
+                      00006 ;       Description :   Routine d'initialisation du port de communication série.
+                      00007 ;                   RS232 sur le PIC16F88 à 19200 bd (RX=RB2 et TX=RB5)
+                      00008 ;                                                       
+                      00009 ;       Fonctions appelées :    Aucune.         
+                      00010 ;       Paramètres d'entrée :   Aucune.         
+                      00011 ;       Paramètres de sortie :  Aucun.          
+                      00012 ;       Variables utilisées :   Aucune.
+                      00013 ;       Equate :                    Aucun.      
+                      00014 ;       #Define :               BANK0, BANK1.  
+                      00015 ;              
+                      00016 ;                                                       
+                      00017 ;******************************************************************************
+007C                  00018 InitRS232
+007C   3090           00019     movlw   b'10010000';     Set reception sur port serie SPEN=CREN = 1
+007D   0098           00020     movwf   RCSTA;       
+007E   1683           00021     BANK1;       
+007F   3024           00022     movlw   b'00100100';     Set la transmission sur le port serie
+0080   0098           00023     movwf   TXSTA;       
+0081   3019           00024     movlw   .25;             Set la vitesse a 19200 bds
+0082   0099           00025     movwf   SPBRG;       
+0083   1283           00026     BANK0;      
+0084   0008           00027     return;             
+                      00028 ;fin routine InitRS232---------------------------------------------------------
+                      00029 
+                      00030 ;*************************************Tx232************************************
+                      00031 ;       Nom de la fonction : Tx232                      
+                      00032 ;       Auteur : Pierre Chouinard               
+                      00033 ;       Date de création : 10-10-2009   
+                      00034 ;       Date de modification : 21-07-2018       A.C.                                          
+                      00035 ;       Description :   Routine de transmission de la communication série RS-232.
+                      00036 ;                   RS232 sur le PIC16F88 à 19200 bd (RX=RB2 et TX=RB5)
+                      00037 ;                                                       
+                      00038 ;       Fonctions appelées :    Aucune.         
+                      00039 ;       Paramètres d'entrée :   Aucune.         
+                      00040 ;       Paramètres de sortie :  Aucun.          
+                      00041 ;       Variables utilisées :   Aucune.
+                      00042 ;       Equate :                Aucun.  
+                      00043 ;       #Define :               Aucun. 
+MPASM 5.87                          MAIN.ASM   12-18-2023  17:19:35         PAGE  9
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+                      00044 ;
+                      00045 ;******************************************************************************
+0085                  00046 Tx232
+0085   1E0C           00047     btfss   PIR1,TXIF;       Attend que la transmission du caractere 
+0086   2???           00048     goto    Tx232;           precedant soit terminer   
+0087   0099           00049     movwf   TXREG;           Transmet le caractere
+0088   0008           00050     return;       
+                      00051 ;fin routine Tx232-------------------------------------------------------------
+                      00209 #include    <FonctionsBras.asm> 
+                      00001 ;****************************** LirePince *************************************
+                      00002 ;       Nom de la fonction : LirePince                 
+                      00003 ;       Auteur : Félix Trempblay, Marie-Pier Morin, Alexandre Dionne         
+                      00004 ;       Date de creation : 04-12-2023                             
+                      00005 ;       Description : Fonctions qui lit la valeur de la cellules de charge  
+                      00006 ;                     présente sur la pince du bras robotisé. Mets la valeur  
+                      00007 ;                     lu dans vPince
+                      00008 ;                       
+                      00009 ;                                                       
+                      00010 ;       Fonctions appelees : SelectPA3ADC, StartConvADC, LectureADC            
+                      00011 ;       Paramètres d'entree : Aucun             
+                      00012 ;       Paramètres de sortie : Aucun          
+                      00013 ;       Variables utilisees : vPince               
+                      00014 ;                                               
+                      00015 ;******************************************************************************
+0089                  00016 LirePince 
+0089   2???           00017     call    SelectPA3ADC
+008A   2???           00018     call    StartConvADC
+008B                  00019 AttenteADCP
+008B   1F0C           00020     btfss   PIR1,ADIF
+008C   2???           00021     goto    AttenteADCP
+008D   130C           00022     bcf     PIR1,ADIF
+008E   2???           00023     call    LectureADC
+008F   0837           00024     movfw   vADCH
+0090   00BD           00025     movwf   vPince
+0091   0008           00026     return
+                      00027 ; fin routine LirePince -------------------------------------------------------
+                      00028 
+                      00029 ;****************************** LirePaveXY ************************************
+                      00030 ;       Nom de la fonction : LirePaveXY                 
+                      00031 ;       Auteur : Félix Trempblay, Marie-Pier Morin, Alexandre Dionne         
+                      00032 ;       Date de creation : 04-12-2023                             
+                      00033 ;       Description : Fonctions qui lit la valeur du pave tactile en X et en Y.  
+                      00034 ;                     Mets la valeur lu dans vPince.   
+                      00035 ;                                            
+                      00036 ;                                                       
+                      00037 ;       Fonctions appelees : Delai1ms, SelectPA0ADC, SelectPA1ADC,  
+                      00038 ;                            StartConvADC, LectureADC          
+                      00039 ;       Paramètres d'entree : Aucun             
+                      00040 ;       Paramètres de sortie : Aucun          
+                      00041 ;       Variables utilisees : vPaveX, vPaveY                
+                      00042 ;                                               
+                      00043 ;******************************************************************************
+0092                  00044 LirePaveXY
+MPASM 5.87                          MAIN.ASM   12-18-2023  17:19:35         PAGE 10
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+0092   1683           00045     BANK1
+0093   30BE           00046     movlw   b'10111110'       ; PortA en entree sauf A0 et A6
+0094   0085           00047     movwf   TRISA                   
+0095   1283           00048     BANK0
+0096   2???           00049     call    Delai1ms
+0097   1705           00050     bsf     PORTA,6
+0098   1005           00051     bcf     PORTA,0
+0099   2???           00052     call    SelectPA1ADC
+009A   2???           00053     call    StartConvADC
+009B                  00054 AttenteADCY
+009B   1F0C           00055     btfss   PIR1,ADIF
+009C   2???           00056     goto    AttenteADCY
+009D   130C           00057     bcf     PIR1,ADIF
+009E   2???           00058     call    LectureADC
+009F   0837           00059     movfw   vADCH
+00A0   00BB           00060     movwf   vPaveX
+                      00061     
+00A1   1683           00062     BANK1
+00A2   307D           00063     movlw   b'01111101'       ; PortA en entree sauf A1 et A7
+00A3   0085           00064     movwf   TRISA                   
+00A4   1283           00065     BANK0
+00A5   2???           00066     call    Delai1ms
+00A6   1785           00067     bsf     PORTA,7
+00A7   1085           00068     bcf     PORTA,1
+00A8   2???           00069     call    SelectPA0ADC
+00A9   2???           00070     call    StartConvADC
+00AA                  00071 AttenteADCX
+00AA   1F0C           00072     btfss   PIR1,ADIF
+00AB   2???           00073     goto    AttenteADCX
+00AC   130C           00074     bcf     PIR1,ADIF
+00AD   2???           00075     call    LectureADC
+00AE   0837           00076     movfw   vADCH
+00AF   00BC           00077     movwf   vPaveY
+                      00078     
+00B0   0008           00079     return
+                      00080 ; fin routine LirePaveXY ------------------------------------------------------
+                      00081     
+                      00082 ;****************************** LireBalance ***********************************
+                      00083 ;       Nom de la fonction : LireBalance                 
+                      00084 ;       Auteur : Félix Trempblay, Marie-Pier Morin, Alexandre Dionne         
+                      00085 ;       Date de creation : 04-12-2023                             
+                      00086 ;       Description : Fonctions qui lit la valeur de la balance. Mets la valeur  
+                      00087 ;                     lu dans vBalance.                   
+                      00088 ;                       
+                      00089 ;                                                       
+                      00090 ;       Fonctions appelees : SelectPA2ADC, StartConvADC, LectureADC          
+                      00091 ;       Paramètres d'entree : Aucun             
+                      00092 ;       Paramètres de sortie : Aucun           
+                      00093 ;       Variables utilisees : vBalance                
+                      00094 ;                                               
+                      00095 ;******************************************************************************
+00B1                  00096 LireBalance  
+00B1   2???           00097     call    SelectPA2ADC
+MPASM 5.87                          MAIN.ASM   12-18-2023  17:19:35         PAGE 11
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+00B2   2???           00098     call    StartConvADC
+00B3                  00099 AttenteADCB
+00B3   1F0C           00100     btfss   PIR1,ADIF
+00B4   2???           00101     goto    AttenteADCB
+00B5   130C           00102     bcf     PIR1,ADIF
+00B6   2???           00103     call    LectureADC
+00B7   0837           00104     movfw   vADCH
+00B8   00BE           00105     movwf   vBalance
+00B9   0008           00106     return
+                      00107 ; fin routine LireBalance -----------------------------------------------------
+                      00108 
+                      00109 ;*************************** BougerMoteurs ************************************
+                      00110 ;       Nom de la fonction : BougerMoteurs                 
+                      00111 ;       Auteur : Félix Trempblay, Marie-Pier Morin, Alexandre Dionne         
+                      00112 ;       Date de creation : 04-12-2023                             
+                      00113 ;       Description : Fonctions qui déplace les moteurs du bras robotisés en   
+                      00114 ;                     fonction de la valeurs des variables vMoteur(0-4)                       
+                      00115 ;                         
+                      00116 ;
+                      00117 ;       Fonctions appelees : SetPWMPCA9685          
+                      00118 ;       Paramètres d'entree : vMoteur0, vMoteur1, vMoteur2, vMoteur3, vMoteur4             
+                      00119 ;       Paramètres de sortie : Aucun           
+                      00120 ;       Variables utilisees : Aucune                
+                      00121 ;                                               
+                      00122 ;******************************************************************************
+00BA                  00123 BougerMoteurs
+00BA   11C4           00124     bcf     FLAGTRAMEOK
+00BB   3000           00125     movlw   .0
+00BC   00BA           00126     movwf   vMoteurPCA
+00BD   083F           00127     movfw   vMoteur0
+00BE   00B8           00128     movwf   vPWM
+00BF   2???           00129     call    SetPWMPCA9685
+00C0   3001           00130     movlw   .1
+00C1   00BA           00131     movwf   vMoteurPCA
+00C2   0840           00132     movfw   vMoteur1
+00C3   00B8           00133     movwf   vPWM
+00C4   2???           00134     call    SetPWMPCA9685
+00C5   3002           00135     movlw   .2
+00C6   00BA           00136     movwf   vMoteurPCA
+00C7   0841           00137     movfw   vMoteur2
+00C8   00B8           00138     movwf   vPWM
+00C9   2???           00139     call    SetPWMPCA9685
+00CA   3003           00140     movlw   .3
+00CB   00BA           00141     movwf   vMoteurPCA
+00CC   0842           00142     movfw   vMoteur3
+00CD   00B8           00143     movwf   vPWM
+00CE   2???           00144     call    SetPWMPCA9685
+00CF   3004           00145     movlw   .4
+00D0   00BA           00146     movwf   vMoteurPCA
+00D1   0843           00147     movfw   vMoteur4
+00D2   00B8           00148     movwf   vPWM
+00D3   2???           00149     call    SetPWMPCA9685
+00D4   0008           00150     return
+MPASM 5.87                          MAIN.ASM   12-18-2023  17:19:35         PAGE 12
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+                      00151 ; fin routine BougerMoteurs ---------------------------------------------------
+                      00152     
+                      00153 ;************************** TraiterCaractere **********************************
+                      00154 ;       Nom de la fonction : TraiterCaractere                 
+                      00155 ;       Auteur : Félix Trempblay, Marie-Pier Morin, Alexandre Dionne         
+                      00156 ;       Date de creation : 04-12-2023                             
+                      00157 ;       Description : Traite les caractères reçu par communication RS-232.  
+                      00158 ;                     Vérifie si la trame est valide lorsque tous les   
+                      00159 ;                     caractères sont reçus.  
+                      00160 ;                       
+                      00161 ;                                                       
+                      00162 ;       Fonctions appelees : Aucune          
+                      00163 ;       Paramètres d'entree : vOctet(0-7)              
+                      00164 ;       Paramètres de sortie : Aucun           
+                      00165 ;       Variables utilisees : vOctetG, vOctetO, vMoteur0, vMoteur1, vMoteur2                 
+                      00166 ;                             vMoteur3, vMoteur4, vCheckSum
+                      00167 ;
+                      00168 ;******************************************************************************
+00D5                  00169 TraiterCaractere
+00D5   0829           00170     movfw   vIndiceOUT    
+00D6   3C20           00171     sublw   0x20
+00D7   1D03           00172     btfss   ZERO
+00D8   2???           00173     goto    SWITCH1Rx
+                      00174 
+00D9   0820           00175     movfw   vOctet0 
+00DA   3C47           00176     sublw   'G'
+00DB   1D03           00177     btfss   ZERO
+00DC   2???           00178     goto    BADCOM
+00DD   0820           00179     movfw   vOctet0
+00DE   00AA           00180     movwf   vOctetG
+Message[305]: Using default destination of 1 (file).
+00DF   0AA9           00181     incf    vIndiceOUT
+00E0   2???           00182     goto    FINSWITCHCASE
+                      00183     
+00E1                  00184 SWITCH1Rx
+00E1   0829           00185     movfw   vIndiceOUT
+00E2   3C21           00186     sublw   0x21
+00E3   1D03           00187     btfss   ZERO
+00E4   2???           00188     goto    SWITCH2Rx
+                      00189     
+00E5   0821           00190     movfw   vOctet1 
+00E6   3C4F           00191     sublw   'O'
+00E7   1D03           00192     btfss   ZERO
+00E8   2???           00193     goto    BADCOM
+00E9   0821           00194     movfw   vOctet1        
+00EA   00AB           00195     movwf   vOctetO
+Message[305]: Using default destination of 1 (file).
+00EB   0AA9           00196     incf    vIndiceOUT
+00EC   2???           00197     goto    FINSWITCHCASE
+                      00198     
+00ED                  00199 SWITCH2Rx
+00ED   0829           00200     movfw   vIndiceOUT  
+00EE   3C22           00201     sublw   0x22
+MPASM 5.87                          MAIN.ASM   12-18-2023  17:19:35         PAGE 13
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+00EF   1D03           00202     btfss   ZERO
+00F0   2???           00203     goto    SWITCH3Rx
+                      00204     
+00F1   0822           00205     movfw   vOctet2        
+00F2   00BF           00206     movwf   vMoteur0
+Message[305]: Using default destination of 1 (file).
+00F3   0AA9           00207     incf    vIndiceOUT
+00F4   2???           00208     goto    FINSWITCHCASE
+                      00209     
+00F5                  00210 SWITCH3Rx
+00F5   0829           00211     movfw   vIndiceOUT
+00F6   3C23           00212     sublw   0x23
+00F7   1D03           00213     btfss   ZERO
+00F8   2???           00214     goto    SWITCH4Rx
+                      00215     
+00F9   0823           00216     movfw   vOctet3        
+00FA   00C0           00217     movwf   vMoteur1
+Message[305]: Using default destination of 1 (file).
+00FB   0AA9           00218     incf    vIndiceOUT
+00FC   2???           00219     goto    FINSWITCHCASE
+                      00220     
+00FD                  00221 SWITCH4Rx
+00FD   0829           00222     movfw   vIndiceOUT
+00FE   3C24           00223     sublw   0x24
+00FF   1D03           00224     btfss   ZERO
+0100   2???           00225     goto    SWITCH5Rx
+                      00226     
+0101   0824           00227     movfw   vOctet4        
+0102   00C1           00228     movwf   vMoteur2
+Message[305]: Using default destination of 1 (file).
+0103   0AA9           00229     incf    vIndiceOUT
+0104   2???           00230     goto    FINSWITCHCASE
+                      00231     
+0105                  00232 SWITCH5Rx
+0105   0829           00233     movfw   vIndiceOUT
+0106   3C25           00234     sublw   0x25
+0107   1D03           00235     btfss   ZERO
+0108   2???           00236     goto    SWITCH6Rx
+                      00237     
+0109   0825           00238     movfw   vOctet5        
+010A   00C2           00239     movwf   vMoteur3
+Message[305]: Using default destination of 1 (file).
+010B   0AA9           00240     incf    vIndiceOUT
+010C   2???           00241     goto    FINSWITCHCASE
+                      00242     
+010D                  00243 SWITCH6Rx
+010D   0829           00244     movfw   vIndiceOUT
+010E   3C26           00245     sublw   0x26
+010F   1D03           00246     btfss   ZERO
+0110   2???           00247     goto    SWITCH7Rx
+                      00248     
+0111   0826           00249     movfw   vOctet6        
+0112   00C3           00250     movwf   vMoteur4
+MPASM 5.87                          MAIN.ASM   12-18-2023  17:19:35         PAGE 14
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+Message[305]: Using default destination of 1 (file).
+0113   0AA9           00251     incf    vIndiceOUT
+0114   2???           00252     goto    FINSWITCHCASE
+                      00253     
+0115                  00254 SWITCH7Rx  
+0115   0829           00255     movfw   vIndiceOUT
+0116   3C27           00256     sublw   0x27
+0117   1D03           00257     btfss   ZERO
+0118   2???           00258     goto    FINSWITCHCASE
+                      00259           
+0119   0820           00260     movfw   vOctet0
+011A   0721           00261     addwf   vOctet1,W
+011B   0722           00262     addwf   vOctet2,W
+011C   0723           00263     addwf   vOctet3,W
+011D   0724           00264     addwf   vOctet4,W
+011E   0725           00265     addwf   vOctet5,W
+011F   0726           00266     addwf   vOctet6,W
+0120   0227           00267     subwf   vOctet7,W
+0121   1D03           00268     btfss   ZERO 
+0122   2???           00269     goto    BADCOM
+0123   0827           00270     movfw   vOctet7
+0124   00AC           00271     movwf   vCheckSum
+0125   3020           00272     movlw   0x20
+0126   00A9           00273     movwf   vIndiceOUT
+0127   15C4           00274     bsf     FLAGTRAMEOK
+0128   2???           00275     goto    FINSWITCHCASE
+                      00276     
+0129                  00277 BADCOM
+0129   3020           00278     movlw   0x20
+012A   00A9           00279     movwf   vIndiceOUT
+012B   00A8           00280     movwf   vIndiceIN
+                      00281     
+012C                  00282 FINSWITCHCASE
+012C   0008           00283     return
+                      00284 ; fin routine TraiterCaractere ------------------------------------------------
+                      00285     
+                      00286 ;************************* EnvoyerTrameDallas *********************************
+                      00287 ;       Nom de la fonction : EnvoyerTrameDallas                 
+                      00288 ;       Auteur : Félix Trempblay, Marie-Pier Morin, Alexandre Dionne         
+                      00289 ;       Date de creation : 04-12-2023                             
+                      00290 ;       Description : Envoie la trame à la carte Dallas par communication  
+                      00291 ;                     RS-232  
+                      00292 ;                               
+                      00293 ;                                                       
+                      00294 ;       Fonctions appelees : LirePaveXY, LireBalance, LirePince, Tx232        
+                      00295 ;       Paramètres d'entree : Aucun             
+                      00296 ;       Paramètres de sortie : Aucun          
+                      00297 ;       Variables utilisees : vPaveX, vPaveY, vPince, vBalance, vCheckSum                
+                      00298 ;                                               
+                      00299 ;******************************************************************************
+012D                  00300 EnvoyerTrameDallas
+012D   1244           00301     bcf     FLAG100MS
+012E   2???           00302     call    LirePaveXY
+MPASM 5.87                          MAIN.ASM   12-18-2023  17:19:35         PAGE 15
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+012F   2???           00303     call    LireBalance
+0130   2???           00304     call    LirePince
+                      00305     
+0131   1244           00306     bcf     FLAG100MS
+0132   3047           00307     movlw   'G'
+0133   3E4F           00308     addlw   'O'
+0134   073B           00309     addwf   vPaveX,W
+0135   073C           00310     addwf   vPaveY,W
+0136   073D           00311     addwf   vPince,W
+0137   073E           00312     addwf   vBalance,W
+0138   00AC           00313     movwf   vCheckSum
+0139   3047           00314     movlw   'G'
+013A   2???           00315     call    Tx232
+013B   304F           00316     movlw   'O'
+013C   2???           00317     call    Tx232
+013D   083B           00318     movfw   vPaveX
+013E   2???           00319     call    Tx232
+013F   083C           00320     movfw   vPaveY
+0140   2???           00321     call    Tx232
+0141   083D           00322     movfw   vPince
+0142   2???           00323     call    Tx232
+0143   083E           00324     movfw   vBalance
+0144   2???           00325     call    Tx232
+0145   3000           00326     movlw   0x00
+0146   2???           00327     call    Tx232
+0147   082C           00328     movfw   vCheckSum
+0148   2???           00329     call    Tx232
+0149   0008           00330     return
+                      00331 ; fin routine EnvoyerTrameDallas ----------------------------------------------
+                      00210 #include    <FonctionDelai.asm> 
+                      00001 ;***************************** InitTimer1 *************************************
+                      00002 ;       Nom de la fonction : InitTimer1                   
+                      00003 ;       Auteur : Félix Trempblay, Marie-Pier Morin, Alexandre Dionne
+                      00004 ;       Date de creation : 02-12-2023                              
+                      00005 ;       Description : Fonction d'initialisation du Timer1 
+                      00006 ;                                                       
+                      00007 ;       Fonctions appelees : Aucune 
+                      00008 ;       Paramètres d'entree : Aucun  
+                      00009 ;       Paramètres de sortie : Aucun 
+                      00010 ;       Variables utilisees : Aucune  
+                      00011 ;                                               
+                      00012 ;******************************************************************************
+014A                  00013 InitTimer1
+014A   3099           00014     movlw   0x99        ; Setup du timer1
+014B   008F           00015     movwf   TMR1H       ; à une fréquence de 
+014C   30FE           00016     movlw   0xFE        ; 250kHz
+014D   008E           00017     movwf   TMR1L       ; 100ms de délai
+014E   3031           00018     movlw   b'00110001' ; 0x9E TH et 0x58 TL théoriquement
+014F   0090           00019     movwf   T1CON
+0150   0008           00020     return
+                      00021 ; fin routine InitTimer1 ------------------------------------------------------
+                      00022 
+                      00023 ;******************************** Delai5us ************************************
+MPASM 5.87                          MAIN.ASM   12-18-2023  17:19:35         PAGE 16
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+                      00024 ;  Nom de la fonction : Delai5us      
+                      00025 ;  Auteur : Félix Trempblay, Marie-Pier Morin, Alexandre Dionne   
+                      00026 ;  Date de creation : 02-11-2023             
+                      00027 ;  Description : Routine de delai de 5 us par plusieur nop
+                      00028 ;                Calcul : 1 nop = 1us, 1 call + 1 return = 2us
+                      00029 ;                5 * 1us  = 5us
+                      00030 ; 
+                      00031 ;              
+                      00032 ;  Fonctions appelees : Aucune       
+                      00033 ;  Paramètres d'entree : Aucun           
+                      00034 ;  Paramètres de sortie : Aucun           
+                      00035 ;  Variables utilisees : Aucune               
+                      00036 ;              
+                      00037 ;******************************************************************************
+0151                  00038 Delai5us
+0151   0000           00039     nop                     ; 3 no operation 
+0152   0000           00040     nop                     ; pour faire un delai
+0153   0000           00041     nop                     ; de 5us, car 1 nop = 1us
+0154   0008           00042     Return                  ; Pareil pour le return et le call
+                      00043 ; fin routine Delai5us---------------------------------------------------------
+                      00044     
+                      00045 ;******************************* Delai1ms *************************************
+                      00046 ;       Nom de la fonction : Delai1ms                   
+                      00047 ;       Auteur : Félix Trempblay, Marie-Pier Morin, Alexandre Dionne
+                      00048 ;       Date de creation : 26-10-2023                                
+                      00049 ;       Description : Fonction de délai de 1ms par appel de la fonction 5us. 
+                      00050 ;                     Calcul : 5us * 200 = 1ms
+                      00051 ;
+                      00052 ;                                                       
+                      00053 ;       Fonctions appelees : Delai5us
+                      00054 ;       Paramètres d'entree : Aucun  
+                      00055 ;       Paramètres de sortie : Aucun 
+                      00056 ;       Variables utilisees : vCompt1ms  
+                      00057 ;                                               
+                      00058 ;******************************************************************************
+0155                  00059 Delai1ms
+0155   30C8           00060      movlw  .200
+0156   00B4           00061      movwf  vCompt1ms
+0157                  00062 encore1ms
+0157   2???           00063      call   Delai5us
+Message[305]: Using default destination of 1 (file).
+0158   0BB4           00064      decfsz vCompt1ms
+0159   2???           00065      goto   encore1ms
+015A   0008           00066      return   
+                      00067 ; fin routine Delai1ms --------------------------------------------------------
+                      00068 
+                      00069 ;******************************* Delai5ms *************************************
+                      00070 ;       Nom de la fonction : Delai5ms                   
+                      00071 ;       Auteur : Félix Trempblay, Marie-Pier Morin, Alexandre Dionne
+                      00072 ;       Date de creation : 26-10-2023                                
+                      00073 ;       Description : Fonction de délai de 5ms par appel de la fonction 1ms. 
+                      00074 ;                     Calcul : 5 * 1ms = 5ms     
+                      00075 ;          
+MPASM 5.87                          MAIN.ASM   12-18-2023  17:19:35         PAGE 17
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+                      00076 ;
+                      00077 ;       Fonctions appelees : Delai1ms  
+                      00078 ;       Paramètres d'entree : Aucun  
+                      00079 ;       Paramètres de sortie : Aucun 
+                      00080 ;       Variables utilisees : vCompt5ms  
+                      00081 ;                                               
+                      00082 ;******************************************************************************
+015B                  00083 Delai5ms
+015B   3005           00084      movlw  .5
+015C   00B5           00085      movwf  vCompt5ms
+015D                  00086 encore5ms
+015D   2???           00087      call   Delai1ms
+Message[305]: Using default destination of 1 (file).
+015E   0BB5           00088      decfsz vCompt5ms
+015F   2???           00089      goto   encore5ms
+0160   0008           00090      return   
+                      00091 ; fin routine Delai5ms --------------------------------------------------------
+                      00211 #include    <FonctionsI2C.asm>
+                      00001 ;********************************** SDA SCL ***********************************
+                      00002 ;
+                      00003 ; Gestion de SDA et SCL pour ne jamais mettre de vrai 1 sur le bus. C'est les 
+                      00004 ; pull-up sur SDA et SCL qui s'en charge.
+                      00005 ;
+                      00006 ; Pour mettre SDA ou SCL à 1 on met le bit en entree.
+                      00007 ;
+                      00008 ;******************************************************************************
+0161                  00009 SDA0     
+0161   1086           00010      bcf     SDA               ; On s'assure que bit du latch est a 0.
+0162   1683           00011      BANK1
+0163   1086           00012      bcf     TRISB,1           ; SDA en output met bit a 0.
+0164   1283           00013      BANK0
+0165   0008           00014      return
+                      00015 ; fin routine SDA0 ------------------------------------------------------------
+                      00016 
+                      00017 ;******************************************************************************      
+0166                  00018 SDA1 
+0166   1683           00019      BANK1
+0167   1486           00020      bsf     TRISB,1           ; SDA input (pull-up met a 1 ).
+0168   1283           00021      BANK0
+0169   0008           00022      return  
+                      00023 ; fin routine SDA1 ------------------------------------------------------------
+                      00024 
+                      00025 ;******************************************************************************
+016A                  00026 SCL0 
+016A   1006           00027      bcf     SCL               ; On s'assure que le bit du latch est a 0.
+016B   1683           00028      BANK1
+016C   1006           00029      bcf     TRISB,0           ; SCL en output met bit a 0.
+016D   1283           00030      BANK0
+016E   0008           00031      return
+                      00032 ; fin routine SCL0 ------------------------------------------------------------
+                      00033 
+                      00034 ;******************************************************************************         
+016F                  00035 SCL1 
+MPASM 5.87                          MAIN.ASM   12-18-2023  17:19:35         PAGE 18
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+016F   1683           00036      BANK1
+0170   1406           00037      bsf     TRISB,0           ; SCL input (pull-up met a 1 ).
+0171   1283           00038      BANK0
+0172   0008           00039      return 
+                      00040 ; fin routine SCL1 ------------------------------------------------------------  
+                      00041 
+                      00042 ;****************************** StartBitI2C ***********************************
+                      00043 ;       Nom de la fonction : StartBitI2C                       
+                      00044 ;       Auteur : Félix Trempblay, Marie-Pier Morin, Alexandre Dionne                
+                      00045 ;       Date de creation : 02-11-2023                                
+                      00046 ;       Description :   Routine d'initiation d'une communication serie I2C. 
+                      00047 ;                       Doit être appelee à chaque debut d'operation.
+                      00048 ;                       Le passage de 1 à 0 sur la ligne SDA durant
+                      00049 ;                       un niveau 1 sur la ligne SCL initie un START BIT.
+                      00050 ;
+                      00051 ;                                                       
+                      00052 ;       Fonctions appelees : SDA0/1 et SCL0/1           
+                      00053 ;       Paramètres d'entree : Aucun            
+                      00054 ;       Paramètres de sortie : Aucun            
+                      00055 ;       Variables utilisees : Aucune                  
+                      00056 ;                                               
+                      00057 ;******************************************************************************
+0173                  00058 StartBitI2C
+0173   2???           00059     call    SDA1
+0174   2???           00060     call    SCL1
+0175   2???           00061     call    SDA0
+0176   2???           00062     call    SCL0
+0177   0008           00063     return
+                      00064 ; fin routine StartBitI2C------------------------------------------------------
+                      00065 
+                      00066 ;******************************* StopBitI2C ***********************************
+                      00067 ;       Nom de la fonction : StopBitI2C                 
+                      00068 ;       Auteur : Félix Trempblay, Marie-Pier Morin, Alexandre Dionne         
+                      00069 ;       Date de creation : 02-11-2023                             
+                      00070 ;       Description :   Routine de clôture d'une communication serie I2C.
+                      00071 ;                       Doit être appelee à la fin de toutes operations.
+                      00072 ;                       Passage de 0 à 1 sur la ligne SDA durant
+                      00073 ;                       un niveau 1 sur la ligne SCL initie un STOP BIT.
+                      00074 ;                                       
+                      00075 ;
+                      00076 ;       Fonctions appelees : SDA0/1 et SCL0/1          
+                      00077 ;       Paramètres d'entree : Aucun             
+                      00078 ;       Paramètres de sortie : Aucun           
+                      00079 ;       Variables utilisees : Aucune             
+                      00080 ;                                               
+                      00081 ;******************************************************************************
+0178                  00082 StopBitI2C
+0178   2???           00083     call    SDA0
+0179   2???           00084     call    SCL1
+017A   2???           00085     call    SDA1
+017B   2???           00086     call    SCL0
+017C   0008           00087     return    
+                      00088 ; fin routine StopBitI2C-------------------------------------------------------          
+MPASM 5.87                          MAIN.ASM   12-18-2023  17:19:35         PAGE 19
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+                      00089       
+                      00090 ;******************************* Lire1BitI2C **********************************
+                      00091 ;       Nom de la fonction : Lire1BitI2C                        
+                      00092 ;       Auteur : Félix Trempblay, Marie-Pier Morin, Alexandre Dionne           
+                      00093 ;       Date de creation : 02-11-2023                          
+                      00094 ;       Description : Routine de reception d'un bit de communication I2C.
+                      00095 ;                     La routine prend le bit de la ligne SDA après avoir 
+                      00096 ;                     active la ligne SCL. Le bit de donnee est place 
+                      00097 ;                     temporairement dans la variable v1Bit et sera  
+                      00098 ;                     reutilise dans la routine de traitement d'octets.
+                      00099 ;                     
+                      00100 ;
+                      00101 ;       Fonctions appelees : SCL1, SCL0, SDA1, SDA0, Delai5us       
+                      00102 ;       Paramètres d'entree : Aucun             
+                      00103 ;       Paramètres de sortie : Aucun              
+                      00104 ;       Variables utilisees : v1Bit          
+                      00105 ;                                               
+                      00106 ;******************************************************************************
+017D                  00107 Lire1BitI2C
+017D   2???           00108     call    SCL0
+017E   2???           00109     call    SDA1
+017F   2???           00110     call    SCL1
+0180   2???           00111     call    Delai5us
+0181   1C86           00112     btfss   SDA
+0182   2???           00113     goto    Lu0
+0183   2???           00114     goto    Lu1
+0184                  00115 Lu1
+0184   142D           00116     bsf     BITSDA
+0185   2???           00117     goto    FinLire1Bit
+0186                  00118 Lu0
+0186   102D           00119     bcf     BITSDA
+0187                  00120 FinLire1Bit
+0187   2???           00121     call    SCL0
+0188   0008           00122     return
+                      00123 ; fin routine Lire1BitI2C------------------------------------------------------
+                      00124 
+                      00125 ;****************************** Ecrire1BitI2C *********************************
+                      00126 ;       Nom de la fonction : Ecrire1BitI2C                      
+                      00127 ;       Auteur : Félix Trempblay, Marie-Pier Morin, Alexandre Dionne                  
+                      00128 ;       Date de creation : 02-11-2023                         
+                      00129 ;       Description : Routine d'emission d'un bit de communication I2C.
+                      00130 ;                     La routine utilise le bit 0 de la variable v1Bit 
+                      00131 ;                     pour ajuster le niveau de la ligne SDA.  
+                      00132 ;                     Les lignes SDA et SCL sont activee à tour de rôle pour 
+                      00133 ;                     communiquer l'information du maître à l'esclave.
+                      00134 ;                        
+                      00135 ;
+                      00136 ;       Fonctions appelees : SCL1, SCL0, SDA1, SDA0, Delai5us          
+                      00137 ;       Paramètres d'entree : Aucun                 
+                      00138 ;       Paramètres de sortie : Aucun          
+                      00139 ;       Variables utilisees : v1Bit                
+                      00140 ;                                               
+                      00141 ;******************************************************************************
+MPASM 5.87                          MAIN.ASM   12-18-2023  17:19:35         PAGE 20
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+0189                  00142 Ecrire1BitI2C
+0189   2???           00143     call    SCL0
+018A   2???           00144     call    Delai5us
+018B   182D           00145     btfsc   BITSDA
+018C   2???           00146     goto    Ecrit1 
+018D   2???           00147     goto    Ecrit0
+018E                  00148 Ecrit0
+018E   2???           00149     call    SDA0
+018F   2???           00150     goto    FinEcrire1Bit    
+0190                  00151 Ecrit1
+0190   2???           00152     call    SDA1
+0191                  00153 FinEcrire1Bit
+0191   2???           00154     call    SCL1
+0192   2???           00155     call    Delai5us
+0193   2???           00156     call    SCL0
+0194   0008           00157     return 
+                      00158 ; fin routine Ecrire1BitI2C----------------------------------------------------
+                      00159 
+                      00160 ;***************************** Lire8BitsI2C ***********************************
+                      00161 ;       Nom de la fonction : Lire8BitsI2C                      
+                      00162 ;       Auteur : Félix Trempblay, Marie-Pier Morin, Alexandre Dionne         
+                      00163 ;       Date de creation : 02-11-2023                            
+                      00164 ;       Description : Routine de reception de 8 bits de donnee 
+                      00165 ;                     provenant du dispositif I2C.
+                      00166 ;                     La donnee lue est memorisee dans la variable vOctet.
+                      00167 ;                     Ecrit ensuite un ACK ou un NOACK
+                      00168 ;
+                      00169 ;
+                      00170 ;       Fonctions appelees : Lire1BitI2C, Ecrire1BitI2C           
+                      00171 ;       Paramètres d'entree : Aucun          
+                      00172 ;       Paramètres de sortie : Aucun              
+                      00173 ;       Variables utilisees : vCompteur, vOctet, v1Bit, vAckValue               
+                      00174 ;                                               
+                      00175 ;******************************************************************************
+0195                  00176 Lire8BitsI2C
+0195   3008           00177     movlw   .8
+0196   00B3           00178     movwf   vCompteur
+0197                  00179 Lire8Bits
+Message[305]: Using default destination of 1 (file).
+0197   0DAE           00180     rlf     vOctet
+0198   1003           00181     bcf     CARRY
+0199   2???           00182     call    Lire1BitI2C
+019A   182D           00183     btfsc   v1Bit, 0
+019B   2???           00184     goto    IfValBit1
+019C   2???           00185     goto    IfValBit0
+                      00186     
+019D                  00187 IfValBit0
+019D   102E           00188     bcf     vOctet,0
+019E   2???           00189     goto    SLire
+                      00190     
+019F                  00191 IfValBit1
+019F   142E           00192     bsf     vOctet,0
+                      00193     
+MPASM 5.87                          MAIN.ASM   12-18-2023  17:19:35         PAGE 21
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+01A0                  00194 SLire
+Message[305]: Using default destination of 1 (file).
+01A0   0BB3           00195     decfsz  vCompteur
+01A1   2???           00196     goto    Lire8Bits
+01A2   182F           00197     btfsc   vAckValue, 0
+01A3   2???           00198     goto    NOACK
+01A4   2???           00199     goto    ACK
+                      00200     
+01A5                  00201 NOACK
+01A5   142D           00202     bsf     BITSDA
+01A6   2???           00203     goto    FinLire8Bits
+01A7                  00204 ACK
+01A7   102D           00205     bcf     BITSDA
+                      00206     
+01A8                  00207 FinLire8Bits
+01A8   2???           00208     call    Ecrire1BitI2C
+01A9   0008           00209     return
+                      00210 ; fin routine Lire8BitsI2C-----------------------------------------------------
+                      00211 
+                      00212 ;**************************  Ecrire8BitsI2C ***********************************
+                      00213 ;       Nom de la fonction : Ecrire8BitsI2C
+                      00214 ;       Auteur : Félix Trempblay, Marie-Pier Morin, Alexandre Dionne        
+                      00215 ;       Date de creation : 02-11-2023                            
+                      00216 ;       Description :   Routine d'ecriture d'un octet de donnee vers
+                      00217 ;                       le dispositif I2C.
+                      00218 ;                       L'octet a transmettre est dans la variable vOctet 
+                      00219 ;                       avant l'appel de la fonction.
+                      00220 ;                       Lecture d'un bit apres la transmission pour le 
+                      00221 ;                       ACK/NOACK 
+                      00222 ;
+                      00223 ;
+                      00224 ;       Fonctions appelees : Ecrire1BitI2C, Lire1BitI2C        
+                      00225 ;       Paramètres d'entree : Aucun
+                      00226 ;       Paramètres de sortie : Aucun    
+                      00227 ;       Variables utilisees : vCompteur, vOctet, v1Bit      
+                      00228 ;                                               
+                      00229 ;******************************************************************************
+01AA                  00230 Ecrire8BitsI2C
+01AA   3008           00231     movlw   .8
+01AB   00B3           00232     movwf   vCompteur
+01AC                  00233 Envoie8Bits
+01AC   1BAE           00234     btfsc   vOctet,7
+01AD   2???           00235     goto    IfBitVal1
+01AE   2???           00236     goto    IfBitVal0
+                      00237     
+01AF                  00238 IfBitVal0
+01AF   102D           00239     bcf     BITSDA
+01B0   2???           00240     call    Ecrire1BitI2C
+01B1   2???           00241     goto    SEnvoie
+                      00242     
+01B2                  00243 IfBitVal1
+01B2   142D           00244     bsf     BITSDA
+01B3   2???           00245     call    Ecrire1BitI2C
+MPASM 5.87                          MAIN.ASM   12-18-2023  17:19:35         PAGE 22
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+                      00246     
+01B4                  00247 SEnvoie
+01B4   1003           00248     bcf     CARRY
+Message[305]: Using default destination of 1 (file).
+01B5   0DAE           00249     rlf     vOctet
+01B6   0BB3           00250     decfsz  vCompteur,F
+01B7   2???           00251     goto    Envoie8Bits
+01B8   2???           00252     call    Lire1BitI2C 
+01B9   0008           00253     return
+                      00254 ; fin routine Ecrire8BitsI2C---------------------------------------------------
+                      00255 
+                      00256 ;***************************** EcrireMemI2C ***********************************
+                      00257 ;       Nom de la fonction : EcrireMemI2C                                      
+                      00258 ;       Auteur : Félix Trempblay, Marie-Pier Morin, Alexandre Dionne                                    
+                                 
+                      00259 ;       Date de creation : 02-11-2023                                                                 
+                      00260 ;       Description :   Routine de transmission d'un octet de donnée          
+                      00261 ;                       vers la memoire I2C (24LC32).
+                      00262 ;                       Genere les Start et les Stop. 
+                      00263 ;                       Avant l'appel de la fonction: 
+                      00264 ;                       Mettre l'addresse d'écriture dans vADDL et vADDH
+                      00265 ;                       et mettre la donnée à écrire dans vData
+                      00266 ;                       Une fois l'ecriture effectuée, un délai de 5ms.
+                      00267 ;
+                      00268 ;                                                                             
+                      00269 ;       Fonctions appelees : StartBitI2C, StopBitI2C, Ecrire8BitsI2C, ,Delai5ms   
+                      00270 ;       Paramètres d'entree : Aucun                              
+                      00271 ;       Paramètres de sortie : Aucun                                         
+                      00272 ;       Variables utilisees : Aucun                                                     
+                      00273 ;                                                                             
+                      00274 ;******************************************************************************      
+01BA                  00275 EcrireMemI2C
+01BA   2???           00276     call    StartBitI2C
+01BB   30A0           00277     movlw   0xA0
+01BC   00AE           00278     movwf   vOctet
+01BD   2???           00279     call    Ecrire8BitsI2C
+                      00280     
+01BE   0830           00281     movfw   vAddH
+01BF   00AE           00282     movwf   vOctet
+01C0   2???           00283     call    Ecrire8BitsI2C
+                      00284     
+01C1   0831           00285     movfw   vAddB
+01C2   00AE           00286     movwf   vOctet
+01C3   2???           00287     call    Ecrire8BitsI2C
+                      00288     
+01C4   0832           00289     movfw   vData
+01C5   00AE           00290     movwf   vOctet
+01C6   2???           00291     call    Ecrire8BitsI2C
+01C7   2???           00292     call    StopBitI2C
+01C8   2???           00293     call    Delai5ms
+01C9   0008           00294     return
+                      00295 ; fin routine EcrireMemI2C-----------------------------------------------------
+                      00296 
+MPASM 5.87                          MAIN.ASM   12-18-2023  17:19:35         PAGE 23
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+                      00297 ;****************************** LireMemI2C ************************************
+                      00298 ;       Nom de la fonction : LireMemI2C                  
+                      00299 ;       Auteur : Félix Trempblay, Marie-Pier Morin, Alexandre Dionne           
+                      00300 ;       Date de creation : 02-11-2023                            
+                      00301 ;       Description :   Routine de reception d'un octet de donnee 
+                      00302 ;                       provenant de la memoire I2C (24LC32).
+                      00303 ;                       Genere les Start et les Stop. 
+                      00304 ;                       Avant l'appel de la fonction: 
+                      00305 ;                       Decrire les parametres d'entrees.
+                      00306 ;                       A la sortie de la fonction:
+                      00307 ;                       Decrire les parametres de sortie.
+                      00308 ;
+                      00309 ;                       
+                      00310 ;       Fonctions appelees : StartBitI2C, StopBitI2C, Ecrire8BitsI2C,
+                      00311 ;                            Lire8BitsI2C             
+                      00312 ;       Paramètres d'entree : Aucun                  
+                      00313 ;       Paramètres de sortie : Aucun                 
+                      00314 ;       Variables utilisees : vOctet, vADDH, vADDL, vAckValue         
+                      00315 ;                        
+                      00316 ;******************************************************************************
+01CA                  00317 LireMemI2C
+01CA   2???           00318     call    StartBitI2C
+01CB   30A0           00319     movlw   0xA0
+01CC   00AE           00320     movwf   vOctet
+01CD   2???           00321     call    Ecrire8BitsI2C
+                      00322     
+01CE   0830           00323     movfw   vAddH
+01CF   00AE           00324     movwf   vOctet
+01D0   2???           00325     call    Ecrire8BitsI2C
+                      00326     
+01D1   0831           00327     movfw   vAddB
+01D2   00AE           00328     movwf   vOctet
+01D3   2???           00329     call    Ecrire8BitsI2C
+01D4   2???           00330     call    StopBitI2C
+                      00331     
+01D5   2???           00332     call    StartBitI2C
+01D6   30A1           00333     movlw   0xA1
+01D7   00AE           00334     movwf   vOctet
+01D8   2???           00335     call    Ecrire8BitsI2C
+01D9   3001           00336     movlw   .1
+01DA   00AF           00337     movwf   vAckValue
+01DB   2???           00338     call    Lire8BitsI2C
+01DC   2???           00339     call    StopBitI2C
+01DD   0008           00340     return
+                      00341 ; fin routine LireMemI2C-------------------------------------------------------
+                      00212 #include    <FonctionsADC.asm> 
+                      00001 ;******************************* InitADC **************************************
+                      00002 ;       Nom de la fonction : InitADC                   
+                      00003 ;       Auteur : Félix Trempblay, Marie-Pier Morin, Alexandre Dionne
+                      00004 ;       Date de creation : 23-11-28                              
+                      00005 ;       Description : Fonction d'initialisation de l'ADC. 
+                      00006 ;                     Le bit A0 du PortA est pour etre convertit, de base.
+                      00007 ;                     Les bits A0, A1 et A2 sont configurer en entree analogique
+MPASM 5.87                          MAIN.ASM   12-18-2023  17:19:35         PAGE 24
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+                      00008 ;                     
+                      00009 ;
+                      00010 ;       Fonctions appelees : Deali1ms 
+                      00011 ;       Paramètres d'entree : Aucun  
+                      00012 ;       Paramètres de sortie : Aucun 
+                      00013 ;       Variables utilisees : Aucune  
+                      00014 ;                                               
+                      00015 ;******************************************************************************
+01DE                  00016 InitADC
+01DE   1683           00017      BANK1
+01DF   3003           00018      movlw   b'00000011'
+01E0   009B           00019      movwf   ANSEL
+01E1   3000           00020      movlw   b'00000000'
+01E2   009F           00021      movwf   ADCON1
+01E3   1283           00022      BANK0
+01E4   30C1           00023      movlw   b'11000001'
+01E5   009F           00024      movwf   ADCON0
+01E6   2???           00025      call   Delai1ms
+01E7   0008           00026      return 
+                      00027 ; fin routine InitADC ---------------------------------------------------------
+                      00028      
+                      00029      
+                      00030 ;******************************* StartConvADC *********************************
+                      00031 ;       Nom de la fonction : StartConvADC                   
+                      00032 ;       Auteur : Félix Trempblay, Marie-Pier Morin, Alexandre Dionne
+                      00033 ;       Date de creation : 23-11-28                              
+                      00034 ;       Description : Fonction qui demarre une converstion ADC
+                      00035 ;                       
+                      00036 ;                                                       
+                      00037 ;       Fonctions appelees : Aucune 
+                      00038 ;       Paramètres d'entree : Aucun  
+                      00039 ;       Paramètres de sortie : Aucun 
+                      00040 ;       Variables utilisees : Aucune  
+                      00041 ;                                               
+                      00042 ;******************************************************************************
+01E8                  00043 StartConvADC
+01E8   151F           00044      bsf     ADCON0,GO_DONE
+01E9   0008           00045      return 
+                      00046 ; fin routine StartConvADC ----------------------------------------------------
+                      00047      
+                      00048      
+                      00049 ;******************************* LectureADC ***********************************
+                      00050 ;       Nom de la fonction : LectureADC                 
+                      00051 ;       Auteur : Félix Trempblay, Marie-Pier Morin, Alexandre Dionne
+                      00052 ;       Date de creation : 23-11-28                              
+                      00053 ;       Description : Fonction qui lit le resultat convertit de l'ADC 
+                      00054 ;                     vADCL et vADCH doivent etre declare au debut du programme
+                      00055 ;
+                      00056 ;                                                       
+                      00057 ;       Fonctions appelees : Aucune 
+                      00058 ;       Paramètres d'entree : Aucun  
+                      00059 ;       Paramètres de sortie : Aucun 
+                      00060 ;       Variables utilisees : vADCH, vADCL   
+MPASM 5.87                          MAIN.ASM   12-18-2023  17:19:35         PAGE 25
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+                      00061 ;                                               
+                      00062 ;******************************************************************************
+01EA                  00063 LectureADC
+01EA   1683           00064      BANK1
+01EB   081E           00065      movf    ADRESL,w
+01EC   019E           00066      clrf    ADRESL
+01ED   1283           00067      BANK0
+01EE   00B6           00068      movwf   vADCL
+01EF   081E           00069      movf    ADRESH,w
+01F0   019E           00070      clrf    ADRESH
+01F1   00B7           00071      movwf   vADCH
+01F2   0008           00072      return 
+                      00073 ; fin routine  LectureADC ----------------------------------------------------- 
+                      00074           
+                      00075 
+                      00076      
+                      00077 ;******************************* SelectPA0ADC *********************************
+                      00078 ;       Nom de la fonction : SelectPA0ADC                   
+                      00079 ;       Auteur : Félix Trempblay, Marie-Pier Morin, Alexandre Dionne
+                      00080 ;       Date de creation : 23-11-28                              
+                      00081 ;       Description : Fonction qui selectionne l'entree A0 du PortA pour etre 
+                      00082 ;                     convertit     
+                      00083 ;
+                      00084 ;                                                       
+                      00085 ;       Fonctions appelees : Delai1ms 
+                      00086 ;       Paramètres d'entree : Aucun  
+                      00087 ;       Paramètres de sortie : Aucun 
+                      00088 ;       Variables utilisees : Aucune  
+                      00089 ;                                               
+                      00090 ;******************************************************************************
+01F3                  00091 SelectPA0ADC
+01F3   119F           00092      bcf    ADCON0,CHS0
+01F4   121F           00093      bcf    ADCON0,CHS1
+01F5   129F           00094      bcf    ADCON0,CHS2
+01F6   2???           00095      call   Delai1ms
+01F7   0008           00096      return 
+                      00097 ; fin routine  SelectPA0ADC ---------------------------------------------------
+                      00098      
+                      00099 
+                      00100 ;******************************* SelectPA1ADC *********************************
+                      00101 ;       Nom de la fonction : SelectPA1ADC                   
+                      00102 ;       Auteur : Félix Trempblay, Marie-Pier Morin, Alexandre Dionne
+                      00103 ;       Date de creation : 23-11-28                              
+                      00104 ;       Description : Fonction qui selectionne l'entree A1 du PortA pour etre 
+                      00105 ;                     convertit     
+                      00106 ;
+                      00107 ;                                                       
+                      00108 ;       Fonctions appelees : Delai1ms 
+                      00109 ;       Paramètres d'entree : Aucun  
+                      00110 ;       Paramètres de sortie : Aucun 
+                      00111 ;       Variables utilisees : Aucune  
+                      00112 ;                                               
+                      00113 ;******************************************************************************
+MPASM 5.87                          MAIN.ASM   12-18-2023  17:19:35         PAGE 26
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+01F8                  00114 SelectPA1ADC
+01F8   159F           00115      bsf    ADCON0,CHS0
+01F9   121F           00116      bcf    ADCON0,CHS1
+01FA   129F           00117      bcf    ADCON0,CHS2
+01FB   2???           00118      call   Delai1ms
+01FC   0008           00119      return 
+                      00120 ; fin routine  SelectPA0ADC ---------------------------------------------------
+                      00121      
+                      00122 ;******************************* SelectPA2ADC *********************************
+                      00123 ;       Nom de la fonction : SelectPA0ADC                   
+                      00124 ;       Auteur : Félix Trempblay, Marie-Pier Morin, Alexandre Dionne
+                      00125 ;       Date de creation : 23-11-28                              
+                      00126 ;       Description : Fonction qui selectionne l'entree A0 du PortA pour etre 
+                      00127 ;                     convertit     
+                      00128 ;
+                      00129 ;                                                       
+                      00130 ;       Fonctions appelees : Delai1ms 
+                      00131 ;       Paramètres d'entree : Aucun  
+                      00132 ;       Paramètres de sortie : Aucun 
+                      00133 ;       Variables utilisees : Aucune  
+                      00134 ;                                               
+                      00135 ;******************************************************************************
+01FD                  00136 SelectPA2ADC
+01FD   119F           00137      bcf    ADCON0,CHS0
+01FE   161F           00138      bsf    ADCON0,CHS1
+01FF   129F           00139      bcf    ADCON0,CHS2
+0200   2???           00140      call   Delai1ms
+0201   0008           00141      return 
+                      00142 ; fin routine  SelectPA0ADC ---------------------------------------------------
+                      00143      
+                      00144 ;******************************* SelectPA3ADC *********************************
+                      00145 ;       Nom de la fonction : SelectPA0ADC                   
+                      00146 ;       Auteur : Félix Trempblay, Marie-Pier Morin, Alexandre Dionne
+                      00147 ;       Date de creation : 23-11-28                              
+                      00148 ;       Description : Fonction qui selectionne l'entree A0 du PortA pour etre 
+                      00149 ;                     convertit     
+                      00150 ;
+                      00151 ;                                                       
+                      00152 ;       Fonctions appelees : Delai1ms 
+                      00153 ;       Paramètres d'entree : Aucun  
+                      00154 ;       Paramètres de sortie : Aucun 
+                      00155 ;       Variables utilisees : Aucune   
+                      00156 ;                                               
+                      00157 ;******************************************************************************
+0202                  00158 SelectPA3ADC
+0202   159F           00159      bsf    ADCON0,CHS0
+0203   161F           00160      bsf    ADCON0,CHS1
+0204   129F           00161      bcf    ADCON0,CHS2
+0205   2???           00162      call   Delai1ms
+0206   0008           00163      return 
+                      00164 ; fin routine  SelectPA0ADC ---------------------------------------------------
+                      00213 
+                      00214 ;****************************** Interruption **********************************
+MPASM 5.87                          MAIN.ASM   12-18-2023  17:19:35         PAGE 27
+
+
+LOC  OBJECT CODE     LINE SOURCE TEXT
+  VALUE
+
+0207                  00215 Interruption
+                      00216 
+0207                  00217 TestFlagRx                      
+0207   1E8C           00218     btfss   PIR1,RCIF           ; Test du flag de reception RS-232      
+0208   2???           00219     goto   TestFlagTimer1       ; Si non, test du flag du timer1
+0209   0828           00220     movfw  vIndiceIN            ; Si oui, stocker l'octet
+020A   0084           00221     movwf  FSR                  ; Recu dans la variables pointé
+020B   081A           00222     movfw  RCREG                ; par IndiceIN
+020C   0080           00223     movwf  INDF
+020D   128C           00224     bcf    PIR1,RCIF            ; Remise du flag a 0
+Message[305]: Using default destination of 1 (file).
+020E   0AA8           00225     incf   vIndiceIN            ; Incrémente vIndiceIN
+020F   0828           00226     movfw  vIndiceIN            
+0210   3927           00227     andlw  0x27                 ; si vIndiceIN > 0x27, vIndiceIN = 0x20
+0211   00A8           00228     movwf  vIndiceIN  
+                      00229      
+0212                  00230 TestFlagTimer1
+0212   1C0C           00231     btfss   PIR1,TMR1IF         ; Test du flag du timer1
+0213   2???           00232     goto    FinInterrupt        ; Si flag = 0, aller à la fin des interruptions
+0214   100C           00233     bcf     PIR1,TMR1IF         ; Remise du flag du timer1 a 0
+0215   3099           00234     movlw   0x99                ; Recharge du timer1
+0216   008F           00235     movwf   TMR1H               ; à une fréquence de 
+0217   30FE           00236     movlw   0xFE                ; 250kHz
+0218   008E           00237     movwf   TMR1L               ; 100ms de délai
+0219   1644           00238     bsf     FLAG100MS           ; mets a 1 le flag 100ms de délai
+                      00239     
+021A                  00240 FinInterrupt
+021A   0009           00241     retfie                      ; return from interrupt
+                      00242 ; fin de la routine Interruption-----------------------------------------------
+                      00243     
+3F70 3FFC             00244         END                     ; directive 'end of program'
+MPASM 5.87                          MAIN.ASM   12-18-2023  17:19:35         PAGE 28
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+ACK                               000001A7
+ADCON0                            0000001F
+ADCON1                            0000009F
+ADCS0                             00000006
+ADCS1                             00000007
+ADCS2                             00000006
+ADDEN                             00000003
+ADFM                              00000007
+ADIE                              00000006
+ADIF                              00000006
+ADON                              00000000
+ADRESH                            0000001E
+ADRESL                            0000009E
+ANS0                              00000000
+ANS1                              00000001
+ANS2                              00000002
+ANS3                              00000003
+ANS4                              00000004
+ANS5                              00000005
+ANS6                              00000006
+ANSEL                             0000009B
+AddH0                             00000066
+AddH1                             00000064
+AttenteADCB                       000000B3
+AttenteADCP                       0000008B
+AttenteADCX                       000000AA
+AttenteADCY                       0000009B
+BADCOM                            00000129
+BANK0                             bcf       STATUS,RP0
+BANK1                             bsf       STATUS,RP0
+BF                                00000000
+BITSDA                            v1Bit,0
+BRGH                              00000002
+BougerMoteurs                     000000BA
+C                                 00000000
+C1INV                             00000004
+C1OUT                             00000006
+C2INV                             00000005
+C2OUT                             00000007
+CARRY                             STATUS,C
+CCP1CON                           00000017
+CCP1IE                            00000002
+CCP1IF                            00000002
+CCP1M0                            00000000
+CCP1M1                            00000001
+CCP1M2                            00000002
+CCP1M3                            00000003
+CCP1X                             00000005
+CCP1Y                             00000004
+CCPR1                             00000015
+CCPR1H                            00000016
+CCPR1L                            00000015
+CHS0                              00000003
+MPASM 5.87                          MAIN.ASM   12-18-2023  17:19:35         PAGE 29
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+CHS1                              00000004
+CHS2                              00000005
+CIS                               00000003
+CKE                               00000006
+CKP                               00000004
+CM0                               00000000
+CM1                               00000001
+CM2                               00000002
+CMCON                             0000009C
+CMIE                              00000006
+CMIF                              00000006
+CREN                              00000004
+CSRC                              00000007
+CVR0                              00000000
+CVR1                              00000001
+CVR2                              00000002
+CVR3                              00000003
+CVRCON                            0000009D
+CVREN                             00000007
+CVROE                             00000006
+CVRR                              00000005
+Communication                     00000067
+D                                 00000005
+DATA_ADDRESS                      00000005
+DC                                00000001
+DEL1                              PORTB,3
+DEL2                              PORTB,4
+D_A                               00000005
+D_NOT_A                           00000005
+Delai1ms                          00000155
+Delai5ms                          0000015B
+Delai5us                          00000151
+EEADR                             0000010D
+EEADRH                            0000010F
+EECON1                            0000018C
+EECON2                            0000018D
+EEDATA                            0000010C
+EEDATH                            0000010E
+EEIE                              00000004
+EEIF                              00000004
+EEPGD                             00000007
+Ecrire1BitI2C                     00000189
+Ecrire8BitsI2C                    000001AA
+EcrireMemI2C                      000001BA
+Ecrit0                            0000018E
+Ecrit1                            00000190
+Envoie8Bits                       000001AC
+EnvoyerTrameDallas                0000012D
+F                                 00000001
+FERR                              00000002
+FINSWITCHCASE                     0000012C
+FLAG100MS                         vFlag,4
+FLAGFINTRAME                      vFlag,2
+MPASM 5.87                          MAIN.ASM   12-18-2023  17:19:35         PAGE 30
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+FLAGRX                            vFlag,0
+FLAGTRAMEOK                       vFlag,3
+FLAGTX                            vFlag,1
+FREE                              00000004
+FSR                               00000004
+FinEcrire1Bit                     00000191
+FinInterrupt                      0000021A
+FinLire1Bit                       00000187
+FinLire8Bits                      000001A8
+GIE                               00000007
+GO                                00000002
+GO_DONE                           00000002
+GO_NOT_DONE                       00000002
+I2C_DATA                          00000005
+I2C_READ                          00000002
+I2C_START                         00000003
+I2C_STOP                          00000004
+INDF                              00000000
+INT0IE                            00000004
+INT0IF                            00000001
+INTCON                            0000000B
+INTE                              00000004
+INTEDG                            00000006
+INTF                              00000001
+IOFS                              00000002
+IRCF0                             00000004
+IRCF1                             00000005
+IRCF2                             00000006
+IRP                               00000007
+IfBitVal0                         000001AF
+IfBitVal1                         000001B2
+IfValBit0                         0000019D
+IfValBit1                         0000019F
+InitADC                           000001DE
+InitPic                           00000021
+InitRS232                         0000007C
+InitTimer1                        0000014A
+Interruption                      00000207
+LectureADC                        000001EA
+Lire1BitI2C                       0000017D
+Lire8Bits                         00000197
+Lire8BitsI2C                      00000195
+LireBalance                       000000B1
+LireMemI2C                        000001CA
+LirePaveXY                        00000092
+LirePince                         00000089
+Loop                              00000017
+Lu0                               00000186
+Lu1                               00000184
+Main                              00000005
+NOACK                             000001A5
+NOT_A                             00000005
+NOT_ADDRESS                       00000005
+MPASM 5.87                          MAIN.ASM   12-18-2023  17:19:35         PAGE 31
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+NOT_BO                            00000000
+NOT_BOR                           00000000
+NOT_DONE                          00000002
+NOT_PD                            00000003
+NOT_POR                           00000001
+NOT_RBPU                          00000007
+NOT_RC8                           00000006
+NOT_T1SYNC                        00000002
+NOT_TO                            00000004
+NOT_TX8                           00000006
+NOT_W                             00000002
+NOT_WRITE                         00000002
+OCTET                             vOctet,7
+OERR                              00000001
+OPTION_REG                        00000081
+OSCCON                            0000008F
+OSCTUNE                           00000090
+OSFIE                             00000007
+OSFIF                             00000007
+OSTS                              00000003
+P                                 00000004
+PCL                               00000002
+PCLATH                            0000000A
+PCON                              0000008E
+PEIE                              00000006
+PIE1                              0000008C
+PIE2                              0000008D
+PIR1                              0000000C
+PIR2                              0000000D
+PORTA                             00000005
+PORTB                             00000006
+PR2                               00000092
+PS0                               00000000
+PS1                               00000001
+PS2                               00000002
+PSA                               00000003
+R                                 00000002
+RA0                               00000000
+RA1                               00000001
+RA2                               00000002
+RA3                               00000003
+RA4                               00000004
+RA5                               00000005
+RA6                               00000006
+RA7                               00000007
+RB0                               00000000
+RB1                               00000001
+RB2                               00000002
+RB3                               00000003
+RB4                               00000004
+RB5                               00000005
+RB6                               00000006
+RB7                               00000007
+MPASM 5.87                          MAIN.ASM   12-18-2023  17:19:35         PAGE 32
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+RBIE                              00000003
+RBIF                              00000000
+RC8_9                             00000006
+RC9                               00000006
+RCD8                              00000000
+RCIE                              00000005
+RCIF                              00000005
+RCREG                             0000001A
+RCSTA                             00000018
+RD                                00000000
+READ_WRITE                        00000002
+RP0                               00000005
+RP1                               00000006
+RX9                               00000006
+RX9D                              00000000
+R_NOT_W                           00000002
+R_W                               00000002
+ResetPCA9685                      0000002D
+S                                 00000003
+SCL                               PORTB,0
+SCL0                              0000016A
+SCL1                              0000016F
+SCS0                              00000000
+SCS1                              00000001
+SDA                               PORTB,1
+SDA0                              00000161
+SDA1                              00000166
+SEnvoie                           000001B4
+SLire                             000001A0
+SMP                               00000007
+SPBRG                             00000099
+SPEN                              00000007
+SREN                              00000005
+SSPADD                            00000093
+SSPBUF                            00000013
+SSPCON                            00000014
+SSPEN                             00000005
+SSPIE                             00000003
+SSPIF                             00000003
+SSPM0                             00000000
+SSPM1                             00000001
+SSPM2                             00000002
+SSPM3                             00000003
+SSPOV                             00000006
+SSPSTAT                           00000094
+STATUS                            00000003
+SW1                               PORTB,6
+SW2                               PORTB,7
+SW3                               PORTA,7
+SWDTE                             00000000
+SWDTEN                            00000000
+SWITCH1Rx                         000000E1
+SWITCH2Rx                         000000ED
+MPASM 5.87                          MAIN.ASM   12-18-2023  17:19:35         PAGE 33
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+SWITCH3Rx                         000000F5
+SWITCH4Rx                         000000FD
+SWITCH5Rx                         00000105
+SWITCH6Rx                         0000010D
+SWITCH7Rx                         00000115
+SYNC                              00000004
+SelectPA0ADC                      000001F3
+SelectPA1ADC                      000001F8
+SelectPA2ADC                      000001FD
+SelectPA3ADC                      00000202
+SetFreqPCA9685                    00000036
+SetPWMPCA9685                     00000058
+StartBitI2C                       00000173
+StartConvADC                      000001E8
+StopBitI2C                        00000178
+T0CS                              00000005
+T0SE                              00000004
+T1CKPS0                           00000004
+T1CKPS1                           00000005
+T1CON                             00000010
+T1INSYNC                          00000002
+T1OSCEN                           00000003
+T1RUN                             00000006
+T2CKPS0                           00000000
+T2CKPS1                           00000001
+T2CON                             00000012
+TMR0                              00000001
+TMR0IE                            00000005
+TMR0IF                            00000002
+TMR1                              0000000E
+TMR1CS                            00000001
+TMR1H                             0000000F
+TMR1IE                            00000000
+TMR1IF                            00000000
+TMR1L                             0000000E
+TMR1ON                            00000000
+TMR2                              00000011
+TMR2IE                            00000001
+TMR2IF                            00000001
+TMR2ON                            00000002
+TOUTPS0                           00000003
+TOUTPS1                           00000004
+TOUTPS2                           00000005
+TOUTPS3                           00000006
+TRISA                             00000085
+TRISA0                            00000000
+TRISA1                            00000001
+TRISA2                            00000002
+TRISA3                            00000003
+TRISA4                            00000004
+TRISA5                            00000005
+TRISA6                            00000006
+TRISA7                            00000007
+MPASM 5.87                          MAIN.ASM   12-18-2023  17:19:35         PAGE 34
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+TRISB                             00000086
+TRISB0                            00000000
+TRISB1                            00000001
+TRISB2                            00000002
+TRISB3                            00000003
+TRISB4                            00000004
+TRISB5                            00000005
+TRISB6                            00000006
+TRISB7                            00000007
+TRMT                              00000001
+TUN0                              00000000
+TUN1                              00000001
+TUN2                              00000002
+TUN3                              00000003
+TUN4                              00000004
+TUN5                              00000005
+TX8_9                             00000006
+TX9                               00000006
+TX9D                              00000000
+TXD8                              00000000
+TXEN                              00000005
+TXIE                              00000004
+TXIF                              00000004
+TXREG                             00000019
+TXSTA                             00000098
+TestFlagRx                        00000207
+TestFlagTimer1                    00000212
+TraiterCaractere                  000000D5
+Tx232                             00000085
+UA                                00000001
+VCFG0                             00000004
+VCFG1                             00000005
+W                                 00000000
+WCOL                              00000007
+WDTCON                            00000105
+WDTPS0                            00000001
+WDTPS1                            00000002
+WDTPS2                            00000003
+WDTPS3                            00000004
+WR                                00000001
+WREN                              00000002
+WRERR                             00000003
+Z                                 00000002
+ZERO                              STATUS,Z
+_BODEN_OFF                        00003FBF
+_BODEN_ON                         00003FFF
+_BOREN_OFF                        00003FBF
+_BOREN_ON                         00003FFF
+_CCP1_RB0                         00003FFF
+_CCP1_RB3                         00002FFF
+_CCPMX_RB0                        00003FFF
+_CCPMX_RB3                        00002FFF
+_CONFIG1                          00002007
+MPASM 5.87                          MAIN.ASM   12-18-2023  17:19:35         PAGE 35
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+_CONFIG2                          00002008
+_CPD_OFF                          00003FFF
+_CPD_ON                           00003EFF
+_CP_ALL                           00001FFF
+_CP_OFF                           00003FFF
+_CP_ON                            00001FFF
+_DEBUG_OFF                        00003FFF
+_DEBUG_ON                         000037FF
+_DEVID1                           00002006
+_EXTCLK                           00003FEF
+_EXTRC_CLKOUT                     00003FFF
+_EXTRC_IO                         00003FFE
+_FCMEN_OFF                        00003FFE
+_FCMEN_ON                         00003FFF
+_FOSC_EC                          00003FEF
+_FOSC_EXTRCCLK                    00003FFF
+_FOSC_EXTRCIO                     00003FFE
+_FOSC_HS                          00003FEE
+_FOSC_INTOSCCLK                   00003FFD
+_FOSC_INTOSCIO                    00003FFC
+_FOSC_LP                          00003FEC
+_FOSC_XT                          00003FED
+_HS_OSC                           00003FEE
+_IDLOC0                           00002000
+_IDLOC1                           00002001
+_IDLOC2                           00002002
+_IDLOC3                           00002003
+_IESO_OFF                         00003FFD
+_IESO_ON                          00003FFF
+_INTRC_CLKOUT                     00003FFD
+_INTRC_IO                         00003FFC
+_LP_OSC                           00003FEC
+_LVP_OFF                          00003F7F
+_LVP_ON                           00003FFF
+_MCLRE_OFF                        00003FDF
+_MCLRE_ON                         00003FFF
+_MCLR_OFF                         00003FDF
+_MCLR_ON                          00003FFF
+_PWRTE_OFF                        00003FFF
+_PWRTE_ON                         00003FF7
+_WDTE_OFF                         00003FFB
+_WDTE_ON                          00003FFF
+_WDT_OFF                          00003FFB
+_WDT_ON                           00003FFF
+_WRT_2048                         00003BFF
+_WRT_256                          00003DFF
+_WRT_ALL                          000039FF
+_WRT_OFF                          00003FFF
+_WRT_PROTECT_2048                 00003BFF
+_WRT_PROTECT_256                  00003DFF
+_WRT_PROTECT_ALL                  000039FF
+_WRT_PROTECT_OFF                  00003FFF
+_XT_OSC                           00003FED
+MPASM 5.87                          MAIN.ASM   12-18-2023  17:19:35         PAGE 36
+
+
+SYMBOL TABLE
+  LABEL                             VALUE 
+
+__16F88                           00000001
+encore1ms                         00000157
+encore5ms                         0000015D
+v1Bit                             0000002D
+vADCH                             00000037
+vADCL                             00000036
+vAckValue                         0000002F
+vAddB                             00000031
+vAddH                             00000030
+vBalance                          0000003E
+vCheckSum                         0000002C
+vCompt1ms                         00000034
+vCompt5ms                         00000035
+vCompteur                         00000033
+vData                             00000032
+vFlag                             00000044
+vIndiceIN                         00000028
+vIndiceOUT                        00000029
+vMoteur0                          0000003F
+vMoteur1                          00000040
+vMoteur2                          00000041
+vMoteur3                          00000042
+vMoteur4                          00000043
+vMoteurPCA                        0000003A
+vOctet                            0000002E
+vOctet0                           00000020
+vOctet1                           00000021
+vOctet2                           00000022
+vOctet3                           00000023
+vOctet4                           00000024
+vOctet5                           00000025
+vOctet6                           00000026
+vOctet7                           00000027
+vOctetG                           0000002A
+vOctetO                           0000002B
+vPWM                              00000038
+vPWMH                             00000039
+vPaveX                            0000003B
+vPaveY                            0000003C
+vPince                            0000003D
+
+Errors   :     0
+Warnings :     0 reported,     0 suppressed
+Messages :    17 reported,    18 suppressed
+
+
