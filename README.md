@@ -2,7 +2,7 @@
 
 https://github.com/user-attachments/assets/57c430d6-a159-4deb-b3c5-ea4f0ffdddad
 
-An embedded software engineering project focused on developing a distributed master-slave microcontroller architecture to drive and monitor a robotic arm. This system was built during the 3rd semester of the Programmable Electronics Advanced Diploma (DEC) at Cégep Limoilou.
+An embedded software engineering project focused on developing a distributed master-slave microcontroller architecture to drive and monitor a robotic arm. This system was built during the 3rd semester of the Programmable Electronics Advanced Diploma (DEC) at Cégep Limoilou. The entire system architecture, distributed firmware, and hardware prototyping were successfully designed and executed within a strict 4-week timeline.
 
 ---
 
